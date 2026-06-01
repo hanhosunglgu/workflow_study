@@ -1,0 +1,109 @@
+{
+  "name": "WBS-TRG-002",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 17 * * 5"
+            }
+          ]
+        }
+      },
+      "id": "trg2-0001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.N8N_BASE_URL || 'http://localhost:5678' }}/webhook/wbs-ork",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "trigger",
+              "value": "cron"
+            },
+            {
+              "name": "schedule",
+              "value": "weekly_friday_1700"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 900000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "trg2-0002",
+      "name": "Call WBS-ORK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst ok = resp.total_progress !== undefined;\nreturn [{\n  json: {\n    cron_fired_at: new Date().toISOString(),\n    ork_called: true,\n    status: ok ? 'success' : 'partial',\n    total_progress: resp.total_progress ?? null,\n    progress_grade: resp.progress_grade ?? null,\n    design_score: resp.design_score ?? null\n  }\n}];"
+      },
+      "id": "trg2-0003",
+      "name": "Log Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Call WBS-ORK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WBS-ORK": {
+      "main": [
+        [
+          {
+            "node": "Log Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "WBS-ERR"
+  },
+  "staticData": null,
+  "tags": [
+    { "name": "wbs", "createdAt": "2026-05-15" },
+    { "name": "trigger", "createdAt": "2026-05-15" }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-05-15T00:00:00.000Z",
+  "id": "WBS-TRG-002"
+}

@@ -1,0 +1,283 @@
+{
+  "name": "WBS-DDA",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wbs-dda",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "3cddd4c0-4d4a-4249-a016-242a5285f5bc",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        460,
+        -80
+      ],
+      "webhookId": "wbs-dda"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst owner = body.owner || $env.GITHUB_OWNER || '';\nconst docRepo = body.repo || $env.DESIGN_DOC_REPO || '';\nconst docPath = body.path || $env.DESIGN_DOC_PATH || '';\n\nconst repoName = docRepo.includes('/') ? docRepo.split('/').pop() : docRepo;\nconst repoOwner = docRepo.includes('/') ? docRepo.split('/')[0] : owner;\n\nif (!repoOwner || !repoName) throw new Error('DESIGN_DOC_REPO가 설정되지 않았습니다.');\nif (!docPath) throw new Error('DESIGN_DOC_PATH가 설정되지 않았습니다.');\n\nreturn [{ json: { owner: repoOwner, repo: repoName, path: docPath } }];"
+      },
+      "id": "1b8134a7-bbcd-4074-8327-dc204a8afd4c",
+      "name": "Init Params",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/contents/{{ $json.path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "887d29d6-c041-4a96-8fbd-1f644f184efb",
+      "name": "GET Design Doc List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        -80
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eLRk8UEJ3iN7jUrm",
+          "name": "GitHub PAT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst files = Array.isArray(resp.body) ? resp.body : (Array.isArray(resp) ? resp : []);\n\nif (files.length === 0 || (resp.body && resp.body.message)) {\n  const errMsg = (resp.body && resp.body.message) ? resp.body.message : '파일 없음';\n  throw new Error('설계 문서 폴더를 읽지 못했습니다: ' + errMsg);\n}\n\nconst mdFiles = files.filter(f => f.name && f.name.endsWith('.md') && f.type === 'file');\nif (mdFiles.length === 0) throw new Error('설계 문서(.md) 파일이 없습니다.');\n\n// 모든 파일 download_url 목록을 단일 아이템으로 반환\nreturn [{ json: { files: mdFiles.map(f => ({ name: f.name, download_url: f.download_url })) } }];"
+      },
+      "id": "df560c8c-4819-4cae-bbad-860cb6c701c5",
+      "name": "Filter MD Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.files[0].download_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "0777aec5-639c-4466-953d-43d534f2427e",
+      "name": "GET File Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fileList = $('Filter MD Files').first().json.files || [];\nconst content = typeof $input.first().json === 'string' ? $input.first().json : JSON.stringify($input.first().json);\n\n// 첫 번째 파일 내용으로 분석\nconst combined = `## ${fileList[0]?.name || 'design.md'}\\n\\n${content}`;\n\nconst prompt = 'Extract API endpoints, DB tables, and sequence steps from the docs below. Return ONLY JSON:\\n{\"endpoints\":[{\"method\":\"\",\"path\":\"\",\"description\":\"\"}],\"tables\":[{\"name\":\"\",\"columns\":[]}],\"sequences\":[{\"name\":\"\",\"steps\":[]}]}\\n\\nDocs:\\n' + combined.substring(0, 3000);\n\nreturn [{ json: { model: 'gpt-4.1-mini', messages: [{ role: 'user', content: prompt }], stream: false } }];"
+      },
+      "id": "f2266423-b753-4acb-a095-ac7dfcc16a18",
+      "name": "Build OpenAI Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $json.model, messages: $json.messages, stream: $json.stream }) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "7a5c7fe2-58eb-4441-a596-7fe2e16a54f7",
+      "name": "OpenAI Extract Structure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1780,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst raw = resp.choices?.[0]?.message?.content || '';\n\nif (!raw) {\n  return [{ json: {\n    agent_id: 'WBS-DDA',\n    repo_type: 'design_doc',\n    endpoints: [], tables: [], sequences: [],\n    error: 'OpenAI 응답 없음'\n  } }];\n}\n\nlet parsed;\ntry {\n  const m = raw.match(/```json\\s*([\\s\\S]*?)```/) || raw.match(/(\\{[\\s\\S]*\\})/);\n  const jsonStr = m ? (m[1] || m[0]) : '{}';\n  parsed = JSON.parse(jsonStr.trim());\n} catch (e) {\n  parsed = { endpoints: [], tables: [], sequences: [] };\n}\n\nreturn [{ json: {\n  agent_id: 'WBS-DDA',\n  repo_type: 'design_doc',\n  endpoints: parsed.endpoints || [],\n  tables: parsed.tables || [],\n  sequences: parsed.sequences || [],\n  error: null\n} }];"
+      },
+      "id": "be45f301-cd0b-4a7d-9be8-e13f46d34a71",
+      "name": "Parse & Build Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "4eb180ee-4cee-4582-9f95-2a9858777913",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2220,
+        -80
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Init Params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Params": {
+      "main": [
+        [
+          {
+            "node": "GET Design Doc List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Design Doc List": {
+      "main": [
+        [
+          {
+            "node": "Filter MD Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter MD Files": {
+      "main": [
+        [
+          {
+            "node": "GET File Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET File Content": {
+      "main": [
+        [
+          {
+            "node": "Build OpenAI Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build OpenAI Request": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Extract Structure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Extract Structure": {
+      "main": [
+        [
+          {
+            "node": "Parse & Build Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Build Output": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": ""
+  }
+}

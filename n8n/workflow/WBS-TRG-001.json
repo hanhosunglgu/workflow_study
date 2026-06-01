@@ -1,0 +1,370 @@
+{
+  "name": "WBS-TRG-001",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "teams-trigger",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e17591f0-e742-4d4a-b642-d852e039e451",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "webhookId": "teams-trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "field-text",     "name": "message",    "value": "={{ $json.body.text }}",                 "type": "string" },
+            { "id": "field-userid",   "name": "userId",     "value": "={{ $json.body.from.id }}",              "type": "string" },
+            { "id": "field-username", "name": "userName",   "value": "={{ $json.body.from.name }}",            "type": "string" },
+            { "id": "field-convid",   "name": "convId",     "value": "={{ $json.body.conversation.id }}",      "type": "string" },
+            { "id": "field-svcurl",   "name": "serviceUrl", "value": "={{ $json.body.serviceUrl }}",           "type": "string" },
+            { "id": "field-actid",    "name": "activityId", "value": "={{ $json.body.id }}",                   "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "cd4681c4-4f20-44ec-b586-db0210e54a62",
+      "name": "Set - 메시지 파싱",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($input.item.json.message || '').replace(/<[^>]+>/g, '').trim();\nconst parts = raw.split(/\\s+/);\nconst keyword = parts[0] || '';\nconst param = parts.slice(1).join(' ').trim();\n\nlet command = 'unknown';\nif (keyword === '진척률') command = '진척률';\nelse if (keyword === '코드검증') command = '코드검증';\nelse if (keyword === '티켓') command = '티켓';\nelse if (keyword === '도움말') command = '도움말';\n\nreturn [{ json: { ...$input.item.json, command, param, rawMessage: raw } }];"
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Code - 명령어 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\" }",
+        "options": { "responseCode": 200 }
+      },
+      "id": "2adafe45-dc95-4bc2-9ccf-af0fea381ba0",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.command }}",
+              "rightValue": "진척률",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and",
+          "options": { "caseSensitive": true, "typeValidation": "strict" }
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-if01-4000-8000-000000000001",
+      "name": "IF 진척률",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, -200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.command }}",
+              "rightValue": "코드검증",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and",
+          "options": { "caseSensitive": true, "typeValidation": "strict" }
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-if02-4000-8000-000000000002",
+      "name": "IF 코드검증",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, -60]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.command }}",
+              "rightValue": "티켓",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and",
+          "options": { "caseSensitive": true, "typeValidation": "strict" }
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-if03-4000-8000-000000000003",
+      "name": "IF 티켓",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 80]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $json.command }}",
+              "rightValue": "도움말",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and",
+          "options": { "caseSensitive": true, "typeValidation": "strict" }
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-if04-4000-8000-000000000004",
+      "name": "IF 도움말",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 220]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/wbs-ork",
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "trigger",      "value": "teams_bot" },
+            { "name": "command",      "value": "={{ $json.command }}" },
+            { "name": "requestedBy",  "value": "={{ $json.userName }}" }
+          ]
+        },
+        "options": {
+          "timeout": 900000,
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Fire WBS-ORK (진척률)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, -200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/wbs-ork",
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "trigger",      "value": "teams_bot" },
+            { "name": "command",      "value": "코드검증" },
+            { "name": "repo_filter",  "value": "={{ $json.param }}" },
+            { "name": "requestedBy",  "value": "={{ $json.userName }}" }
+          ]
+        },
+        "options": {
+          "timeout": 900000,
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Fire WBS-ORK (코드검증)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, -60]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.JIRA_BASE_URL }}/rest/api/3/issue/{{ $json.param }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Basic {{ Buffer.from($env.JIRA_USER_EMAIL + ':' + $env.JIRA_API_TOKEN).toString('base64') }}" },
+            { "name": "Accept",        "value": "application/json" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "a1b2c3d4-0007-4000-8000-000000000007",
+      "name": "HTTP - Jira 이슈 조회",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const issue = $input.item.json;\nconst parsed = $('Code - 명령어 파싱').item.json;\nconst issueKey = parsed.param || '?';\n\nif (issue.errorMessages || issue.errors) {\n  const errMsg = (issue.errorMessages || []).join(', ') || JSON.stringify(issue.errors);\n  return [{ json: { ...parsed, replyText: `❌ 티켓 조회 실패: ${issueKey}\\n오류: ${errMsg}` } }];\n}\n\nconst fields = issue.fields || {};\nconst summary  = fields.summary || '(제목 없음)';\nconst status   = fields.status?.name || '?';\nconst assignee = fields.assignee?.displayName || '미배정';\nconst priority = fields.priority?.name || '?';\nconst sp       = fields.customfield_10016 ?? '?';\nconst updated  = (fields.updated || '').substring(0, 10);\n\nconst statusEmoji = { 'To Do':'🔲','In Progress':'🔄','In Review':'🔍','Done':'✅','Closed':'✅' };\nconst sEmoji = statusEmoji[status] || '⬜';\n\nconst text = [\n  `🎫 ${issueKey} — ${summary}`,\n  `상태: ${sEmoji} ${status}`,\n  `담당자: ${assignee}`,\n  `우선순위: ${priority}`,\n  `Story Point: ${sp}`,\n  `최종 업데이트: ${updated}`\n].join('\\n');\n\nreturn [{ json: { ...parsed, replyText: text } }];"
+      },
+      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "name": "Build Reply - 티켓",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $input.item.json;\nconst text = [\n  `📖 WBS Bot 사용 안내`,\n  ``,\n  `• 진척률 — 이번 주 스프린트 진척률 + 설계 적합성 리포트 실행`,\n  `• 코드검증 [repo] — 특정 Repo 설계 적합성 검증 (예: 코드검증 WBS_Check)`,\n  `• 티켓 [JIRA-ID] — Jira 티켓 상태 조회 (예: 티켓 WBS-123)`,\n  `• 도움말 — 이 메시지 표시`\n].join('\\n');\n\nreturn [{ json: { ...parsed, replyText: text } }];"
+      },
+      "id": "a1b2c3d4-0009-4000-8000-000000000009",
+      "name": "Build Reply - 도움말",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 220]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $input.item.json;\nconst raw = parsed.rawMessage || parsed.message || '';\nconst text = [\n  `❓ 알 수 없는 명령어: ${raw}`,\n  ``,\n  `사용 가능한 명령어를 확인하려면 도움말 을 입력하세요.`\n].join('\\n');\n\nreturn [{ json: { ...parsed, replyText: text } }];"
+      },
+      "id": "a1b2c3d4-0010-4000-8000-000000000010",
+      "name": "Build Reply - Unknown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 360]
+    },
+    {
+      "parameters": { "numberInputs": 4 },
+      "id": "a1b2c3d4-0011-4000-8000-000000000011",
+      "name": "Merge - 응답 통합",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1780, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://login.microsoftonline.com/{{ $env.TEAMS_TENANT_ID }}/oauth2/v2.0/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "grant_type",    "value": "client_credentials" },
+            { "name": "client_id",     "value": "={{ $env.TEAMS_CLIENT_ID }}" },
+            { "name": "client_secret", "value": "={{ $env.TEAMS_CLIENT_SECRET }}" },
+            { "name": "scope",         "value": "https://api.botframework.com/.default" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b431e1da-70e6-417f-bfea-75dc4db64028",
+      "name": "HTTP - Token 발급",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Merge - 응답 통합').item.json.serviceUrl }}v3/conversations/{{ $('Merge - 응답 통합').item.json.convId }}/activities",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $json.access_token }}" },
+            { "name": "Content-Type",  "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "type", "value": "message" },
+            { "name": "text", "value": "={{ $('Merge - 응답 통합').item.json.replyText }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f5710e54-2d7d-455a-95fd-621d77cbcb27",
+      "name": "HTTP - Teams 답장",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2220, 200]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Trigger": {
+      "main": [[{ "node": "Set - 메시지 파싱", "type": "main", "index": 0 }]]
+    },
+    "Set - 메시지 파싱": {
+      "main": [[{ "node": "Code - 명령어 파싱", "type": "main", "index": 0 }]]
+    },
+    "Code - 명령어 파싱": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    },
+    "Respond to Webhook": {
+      "main": [[{ "node": "IF 진척률", "type": "main", "index": 0 }]]
+    },
+    "IF 진척률": {
+      "main": [
+        [{ "node": "Fire WBS-ORK (진척률)", "type": "main", "index": 0 }],
+        [{ "node": "IF 코드검증",           "type": "main", "index": 0 }]
+      ]
+    },
+    "IF 코드검증": {
+      "main": [
+        [{ "node": "Fire WBS-ORK (코드검증)", "type": "main", "index": 0 }],
+        [{ "node": "IF 티켓",                 "type": "main", "index": 0 }]
+      ]
+    },
+    "IF 티켓": {
+      "main": [
+        [{ "node": "HTTP - Jira 이슈 조회", "type": "main", "index": 0 }],
+        [{ "node": "IF 도움말",             "type": "main", "index": 0 }]
+      ]
+    },
+    "IF 도움말": {
+      "main": [
+        [{ "node": "Build Reply - 도움말", "type": "main", "index": 0 }],
+        [{ "node": "Build Reply - Unknown", "type": "main", "index": 0 }]
+      ]
+    },
+    "HTTP - Jira 이슈 조회": {
+      "main": [[{ "node": "Build Reply - 티켓", "type": "main", "index": 0 }]]
+    },
+    "Build Reply - 티켓": {
+      "main": [[{ "node": "Merge - 응답 통합", "type": "main", "index": 0 }]]
+    },
+    "Build Reply - 도움말": {
+      "main": [[{ "node": "Merge - 응답 통합", "type": "main", "index": 1 }]]
+    },
+    "Build Reply - Unknown": {
+      "main": [[{ "node": "Merge - 응답 통합", "type": "main", "index": 2 }]]
+    },
+    "Merge - 응답 통합": {
+      "main": [[{ "node": "HTTP - Token 발급", "type": "main", "index": 0 }]]
+    },
+    "HTTP - Token 발급": {
+      "main": [[{ "node": "HTTP - Teams 답장", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a1b2c3d4-ffff-4000-8000-000000000100",
+  "meta": {
+    "instanceId": "558d88703fb65b2d0e44613bc35916258b0f0bf983c5d4730c00c424b77ca36a"
+  },
+  "id": "WBS-TRG-001",
+  "tags": []
+}

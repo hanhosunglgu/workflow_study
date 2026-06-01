@@ -1,0 +1,212 @@
+{
+  "name": "WBS-RPT",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wbs-rpt",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "rpt-0001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        400
+      ],
+      "webhookId": "wbs-rpt"
+    },
+    {
+      "parameters": {
+        "jsCode": "// WBS-ORK 출력 파싱 — Webhook / Execute Workflow 양쪽 대응\nconst input = $input.first().json;\nconst d = input.body || input;\n\n// 진척률 등급 이모지\nconst gradeEmoji = (grade) => {\n  if (grade === 'GREEN')  return '🟢';\n  if (grade === 'YELLOW') return '🟡';\n  return '🔴';\n};\n\n// 진척률 등급 텍스트\nconst gradeText = (grade) => {\n  if (grade === 'GREEN')  return '정상';\n  if (grade === 'YELLOW') return '주의';\n  return '위험';\n};\n\n// 날짜 포맷 (YYYY-MM-DD → YYYY-MM-DD (요일))\nconst toKorDate = (dateStr, dayName) => {\n  if (!dateStr || dateStr === 'N/A') return 'N/A';\n  return `${dateStr} (${dayName})`;\n};\n\n// 미완료 티켓 정리 (최대 5건 + 초과 처리)\nconst rawIncomplete = d.incomplete_tickets || [];\nconst visibleTickets = rawIncomplete.slice(0, 5);\nconst hiddenCount = rawIncomplete.length - visibleTickets.length;\n\nconst ticketLines = visibleTickets.map(t => {\n  const id       = t.key || t.id || '?';\n  const summary  = (t.summary || t.title || '제목 없음').substring(0, 40);\n  const status   = t.status || 'Unknown';\n  const assignee = t.assignee || '미배정';\n  return `  • [${id}] ${summary} - ${status} (담당: ${assignee})`;\n}).join('\\n');\n\nconst incompleteSection = visibleTickets.length > 0\n  ? ticketLines + (hiddenCount > 0 ? `\\n  • 외 ${hiddenCount}건` : '')\n  : '  • 미완료 티켓 없음';\n\n// Commit Repo별 상세\nconst commitStats = d.commit_stats || {};\nconst repoCommitLines = Object.entries(commitStats)\n  .map(([repo, cnt]) => `${repo}: ${cnt}`)\n  .join(', ');\nconst commitDetail = repoCommitLines ? ` (${repoCommitLines})` : '';\n\n// Gap 섹션 구성\nconst highCount   = d.high_gap_count   || 0;\nconst mediumCount = d.medium_gap_count || 0;\nconst lowCount    = d.low_gap_count    || 0;\n\n// High Gap 상세 (최대 3건)\nconst highGaps = (d.all_gaps || []).filter(g => g.severity === 'high').slice(0, 3);\nconst highGapLines = highGaps.map(g =>\n  `    🔴 ${g.source_agent}: ${(g.item || '').substring(0, 50)}`\n).join('\\n');\n\n// Confluence URL\nconst pageId = $vars.CONFLUENCE_PAGE_ID || '371098596';\nconst baseUrl = ($vars.JIRA_BASE_URL || 'https://lgucorp.atlassian.net').replace(/\\/$/, '');\nconst confluenceUrl = `${baseUrl}/wiki/spaces/${$vars.CONFLUENCE_SPACE_KEY || 'WCA'}/pages/${pageId}`;\n\n// Teams 메시지 본문 조립\nconst progressEmoji = gradeEmoji(d.progress_grade);\nconst designEmoji   = gradeEmoji(d.design_grade);\n\nconst message = [\n  `📊 [WBS Agent] 주간 개발 진척률 리포트`,\n  `📅 기간: ${toKorDate(d.week_start, '월')} ~ ${toKorDate(d.week_end, '금')}`,\n  ``,\n  `━━━━━━━━━━━━━━━━━━━━━`,\n  `🎯 전체 진척률: ${d.total_progress || 0}% ${progressEmoji} ${gradeText(d.progress_grade)}`,\n  `━━━━━━━━━━━━━━━━━━━━━`,\n  ``,\n  `📋 Jira 티켓 현황`,\n  `  • 전체: ${d.total_tickets || 0}개 | ✅ 완료: ${d.done_tickets || 0}개 | 🔄 진행중: ${d.in_progress_tickets || 0}개 | ⏳ 미착수: ${d.todo_tickets || 0}개`,\n  `  • Story Point: ${d.sp_burned || 0} / ${d.sp_total || 0} 소진 (${d.sp_burned_rate || 0}%)`,\n  ``,\n  `💻 GitHub 활동`,\n  `  • Commit: ${d.total_commits || 0}회${commitDetail}`,\n  `  • 활성 개발일: ${d.max_active_days || 0}/5일`,\n  ``,\n  `📌 미완료 티켓`,\n  incompleteSection,\n  ``,\n  `🔍 설계 적합성: ${d.design_score || 0}% ${designEmoji} (불일치 ${d.gap_count || 0}건)`,\n  highCount   > 0 ? `  🔴 High: ${highCount}건` + (highGapLines ? `\\n${highGapLines}` : '') : '',\n  mediumCount > 0 ? `  🟡 Medium: ${mediumCount}건` : '',\n  lowCount    > 0 ? `  🟢 Low: ${lowCount}건` : '',\n  ``,\n  `📎 상세 리포트: ${confluenceUrl}`\n].filter(line => line !== null && line !== undefined).join('\\n');\n\n// 실패 Agent 경고\nconst failedWarning = (d.failed_agents || []).length > 0\n  ? `\\n\\n⚠️ 일부 데이터 미수집: ${d.failed_agents.join(', ')} (Ollama 환경 이슈)`\n  : '';\n\nreturn [{ json: {\n  ...d,\n  teams_message:   message + failedWarning,\n  confluence_url:  confluenceUrl,\n  page_id:         pageId,\n  base_url:        baseUrl,\n  space_key:       $vars.CONFLUENCE_SPACE_KEY || 'WCA',\n  report_timestamp: new Date().toISOString()\n} }];\n"
+      },
+      "id": "rpt-0002",
+      "name": "Build Report Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Teams Adaptive Card — TextBlock + FactSet 만 사용 (최대 호환)\nconst d = $input.first().json;\n\nconst gradeEmoji = (g) => g === 'GREEN' ? '🟢' : g === 'YELLOW' ? '🟡' : '🔴';\nconst gradeText  = (g) => g === 'GREEN' ? '정상' : g === 'YELLOW' ? '주의' : '위험';\n\n// 미완료 티켓 최대 5건\nconst rawTickets  = d.incomplete_tickets || [];\nconst tickets     = rawTickets.slice(0, 5);\nconst hiddenCount = rawTickets.length - tickets.length;\nconst ticketLines = tickets.map(t =>\n  `• [${t.key || '?'}] ${(t.summary || '').substring(0, 30)} (${t.status || '?'}, ${t.assignee || '미배정'})`\n).join('\\n') + (hiddenCount > 0 ? `\\n• 외 ${hiddenCount}건` : '');\n\n// High Gap (최대 3건)\nconst highGaps = (d.all_gaps || []).filter(g => g.severity === 'high').slice(0, 3);\nconst gapLines = highGaps.map(g => `• ${g.source_agent}: ${(g.item || '').substring(0, 45)}`).join('\\n');\n\nconst pe = gradeEmoji(d.progress_grade);\nconst de = gradeEmoji(d.design_grade);\n\nconst bodyItems = [\n  { type: 'TextBlock', text: '📊 WBS Agent 주간 개발 진척률 리포트', weight: 'Bolder', size: 'Large', wrap: true },\n  { type: 'TextBlock', text: `📅 ${d.week_start || 'N/A'} (월) ~ ${d.week_end || 'N/A'} (금)`, isSubtle: true, wrap: true },\n  { type: 'TextBlock', text: `🎯 전체 진척률: ${d.total_progress || 0}% ${pe} ${gradeText(d.progress_grade)}  |  🔍 설계 적합성: ${d.design_score || 0}% ${de} ${gradeText(d.design_grade)}`, weight: 'Bolder', wrap: true },\n  { type: 'TextBlock', text: '📋 Jira 티켓 현황', weight: 'Bolder' },\n  {\n    type: 'FactSet',\n    facts: [\n      { title: '전체', value: `${d.total_tickets || 0}개` },\n      { title: '✅ 완료', value: `${d.done_tickets || 0}개` },\n      { title: '🔄 진행중', value: `${d.in_progress_tickets || 0}개` },\n      { title: '⏳ 미착수', value: `${d.todo_tickets || 0}개` },\n      { title: 'Story Point', value: `${d.sp_burned || 0} / ${d.sp_total || 0} (${d.sp_burned_rate || 0}%)` }\n    ]\n  },\n  { type: 'TextBlock', text: '💻 GitHub 활동', weight: 'Bolder' },\n  {\n    type: 'FactSet',\n    facts: [\n      { title: 'Commit', value: `${d.total_commits || 0}회` },\n      { title: '활성 개발일', value: `${d.max_active_days || 0} / 5일` }\n    ]\n  }\n];\n\nif (tickets.length > 0) {\n  bodyItems.push({ type: 'TextBlock', text: '📌 미완료 티켓', weight: 'Bolder' });\n  bodyItems.push({ type: 'TextBlock', text: ticketLines, wrap: true, size: 'Small' });\n}\n\nif (d.gap_count > 0) {\n  bodyItems.push({ type: 'TextBlock', text: `🔍 설계 Gap: 총 ${d.gap_count}건 (🔴 ${d.high_gap_count || 0} 🟡 ${d.medium_gap_count || 0} 🟢 ${d.low_gap_count || 0})`, weight: 'Bolder', wrap: true });\n  if (gapLines) bodyItems.push({ type: 'TextBlock', text: gapLines, wrap: true, size: 'Small' });\n}\n\nif ((d.failed_agents || []).length > 0) {\n  bodyItems.push({ type: 'TextBlock', text: `⚠️ 데이터 미수집: ${d.failed_agents.join(', ')}`, wrap: true, size: 'Small' });\n}\n\nconst card = { type: 'AdaptiveCard', version: '1.0', body: bodyItems };\n\nconst teamsUrl = 'https://defaultdbebe70a4a5048ccb5a1e047510c68.a9.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/a714a17a81c548a3a685a05298324a84/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=TlEvOZXV-83eDsfyHzr4NRnqceyDI1qHxuRXOL8gi4s';\nreturn [{ json: { ...d, teams_payload: { attachments: [{ contentType: 'application/vnd.microsoft.card.adaptive', content: card }] }, teams_url: teamsUrl } }];\n"
+      },
+      "id": "rpt-0003",
+      "name": "Build Teams Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://defaultdbebe70a4a5048ccb5a1e047510c68.a9.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/a714a17a81c548a3a685a05298324a84/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=TlEvOZXV-83eDsfyHzr4NRnqceyDI1qHxuRXOL8gi4s",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.teams_payload) }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "rpt-0004",
+      "name": "Send Teams Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const teamsResult = $input.first().json;\nconst reportData  = $('Build Report Data').first().json;\n\nconst teamsUrl = $('Build Teams Card').first().json.teams_url || '';\nconst skipped  = !teamsUrl;\nconst success  = skipped ? false : (!teamsResult.error && ((teamsResult.statusCode || 200) < 400));\n\nreturn [{ json: {\n  teams_sent:   success,\n  teams_skipped: skipped,\n  teams_status: skipped ? null : (teamsResult.statusCode || 200),\n  teams_error:  skipped ? 'TEAMS_WEBHOOK_URL 미설정' : (teamsResult.error || null),\n  ...reportData\n} }];"
+      },
+      "id": "rpt-0006",
+      "name": "Check Teams Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const teamsResult = $input.first().json;\n\nconst summary = {\n  agent_id:           'WBS-RPT',\n  report_timestamp:   teamsResult.report_timestamp || new Date().toISOString(),\n  week_start:         teamsResult.week_start,\n  week_end:           teamsResult.week_end,\n  total_progress:     teamsResult.total_progress,\n  progress_grade:     teamsResult.progress_grade,\n  design_score:       teamsResult.design_score,\n  design_grade:       teamsResult.design_grade,\n  teams_sent:         teamsResult.teams_sent,\n  teams_skipped:      teamsResult.teams_skipped || false,\n  teams_status:       teamsResult.teams_status,\n  teams_error:        teamsResult.teams_error,\n  confluence_updated: false,\n  confluence_skipped: true,\n  confluence_error:   null,\n  error: null\n};\n\nreturn [{ json: summary }];"
+      },
+      "id": "rpt-0010",
+      "name": "Build Final Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "rpt-0011",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## WBS-RPT — Report Agent\n\n**입력**: WBS-ORK의 최종 output JSON\n\n**플로우 (Teams only)**:\n1. Webhook 수신\n2. Build Report Data — 메시지 텍스트 + 메타 준비\n3. Build Teams Card — plain text payload 구성\n4. Send Teams Message → Check Teams Result\n5. Build Final Summary → Respond\n\n**비활성 노드** (조직 정책으로 API Token 차단):\n- Get Confluence Page (rpt-0005)\n- Parse Confluence Page (rpt-0007)\n- Build Confluence Body (rpt-0008)\n- Update Confluence Page (rpt-0009)\n→ 나중에 API 접근 허용 시 Build Teams Card에서 분기 연결 복원\n\n**환경변수 필요**:\n- TEAMS_WEBHOOK_URL\n\n**Teams 메시지 형식**: plain text ({ text: '...' }) — Teams Workflows Webhook 호환",
+        "height": 380,
+        "width": 340
+      },
+      "id": "rpt-sticky-01",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        620
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Report Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report Data": {
+      "main": [
+        [
+          {
+            "node": "Build Teams Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Teams Card": {
+      "main": [
+        [
+          {
+            "node": "Send Teams Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Teams Message": {
+      "main": [
+        [
+          {
+            "node": "Check Teams Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Teams Result": {
+      "main": [
+        [
+          {
+            "node": "Build Final Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Final Summary": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "meta": {
+    "instanceId": ""
+  }
+}

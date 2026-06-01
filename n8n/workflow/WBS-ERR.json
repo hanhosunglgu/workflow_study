@@ -1,0 +1,141 @@
+{
+  "name": "WBS-ERR",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b0e00001-0001-4000-8000-000000000001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const err = $input.item.json;\n\nconst workflowName = err.workflow?.name || '(알 수 없음)';\nconst nodeName = err.execution?.lastNodeExecuted || '(알 수 없음)';\nconst errorMsg = err.execution?.error?.message || '상세 메시지 없음';\nconst errorDesc = err.execution?.error?.description || '';\nconst execId = err.execution?.id || '';\nconst execUrl = err.execution?.url || '';\nconst ts = new Date().toISOString().replace('T',' ').substring(0,19);\n\nconst lines = [\n  `🚨 **WBS Agent 오류 알림** (${ts})`,\n  ``,\n  `워크플로: **${workflowName}**`,\n  `마지막 노드: ${nodeName}`,\n  `오류: ${errorMsg}`,\n];\nif (errorDesc) lines.push(`상세: ${errorDesc}`);\nif (execUrl) lines.push(`실행 로그: ${execUrl}`);\nelse if (execId) lines.push(`실행 ID: ${execId}`);\n\nreturn [{ json: { text: lines.join('\\n') } }];"
+      },
+      "id": "b0e00001-0002-4000-8000-000000000002",
+      "name": "Build Error Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://login.microsoftonline.com/{{ $env.TEAMS_TENANT_ID }}/oauth2/v2.0/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            },
+            {
+              "name": "client_id",
+              "value": "={{ $env.TEAMS_CLIENT_ID }}"
+            },
+            {
+              "name": "client_secret",
+              "value": "={{ $env.TEAMS_CLIENT_SECRET }}"
+            },
+            {
+              "name": "scope",
+              "value": "https://api.botframework.com/.default"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "maxTries": 2,
+            "waitBetweenTries": 10000
+          }
+        }
+      },
+      "id": "b0e00001-0003-4000-8000-000000000003",
+      "name": "Get Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        688,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"attachments\": [\n    {\n      \"contentType\": \"application/vnd.microsoft.card.adaptive\",\n      \"content\": {\n        \"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\",\n        \"type\": \"AdaptiveCard\",\n        \"version\": \"1.0\",\n        \"body\": [\n          {\n            \"type\": \"TextBlock\",\n            \"text\": \"🚨 WBS Agent 오류 발생\",\n            \"weight\": \"Bolder\",\n            \"size\": \"Medium\",\n            \"color\": \"Attention\"\n          },\n          {\n            \"type\": \"TextBlock\",\n            \"text\": \"{{ $('Build Error Message').item.json.text }}\",\n            \"wrap\": true\n          }\n        ]\n      }\n    }\n  ]\n}",
+        "options": {
+          "retry": {
+            "maxTries": 2,
+            "waitBetweenTries": 10000
+          }
+        }
+      },
+      "id": "b0e00001-0004-4000-8000-000000000004",
+      "name": "Send Error to Teams",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        912,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Error Message": {
+      "main": [
+        [
+          {
+            "node": "Get Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Token": {
+      "main": [
+        [
+          {
+            "node": "Send Error to Teams",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": ""
+  },
+  "versionId": "b0e00001-ffff-4000-8000-000000000099",
+  "meta": {
+    "instanceId": "558d88703fb65b2d0e44613bc35916258b0f0bf983c5d4730c00c424b77ca36a"
+  },
+  "id": "WBS-ERR",
+  "tags": []
+}

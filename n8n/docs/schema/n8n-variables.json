@@ -1,0 +1,61 @@
+{
+  "description": "n8n Variables에 등록할 환경변수 목록 (Settings → Variables). 값이 미정인 항목은 확보 후 업데이트.",
+  "variables": [
+    {
+      "key": "GITHUB_OWNER",
+      "type": "string",
+      "value": "hanhosunglgu",
+      "description": "GitHub Organization 또는 Username",
+      "task": "0.3.1",
+      "status": "확정"
+    },
+    {
+      "key": "GITHUB_REPOS",
+      "type": "string",
+      "value": "[\"WBS_Check\"]",
+      "description": "분석 대상 Repo 목록 (JSON 배열 형식)",
+      "task": "0.3.1",
+      "status": "확정"
+    },
+    {
+      "key": "JIRA_BASE_URL",
+      "type": "string",
+      "value": "https://lgucorp.atlassian.net",
+      "description": "Jira Cloud 베이스 URL",
+      "task": "0.3.1",
+      "status": "확정"
+    },
+    {
+      "key": "JIRA_PROJECT_KEYS",
+      "type": "string",
+      "value": "[\"WBS\"]",
+      "description": "모니터링할 Jira 프로젝트 키 목록 (JSON 배열)",
+      "task": "0.3.1",
+      "status": "확정"
+    },
+    {
+      "key": "JIRA_BOARD_ID",
+      "type": "string",
+      "value": "8207",
+      "description": "Jira Board ID (Task 2.1.2 - 활성 Sprint 조회에 사용)",
+      "task": "2.1.2",
+      "status": "확정"
+    },
+    {
+      "key": "DESIGN_DOC_REPO",
+      "type": "string",
+      "value": "hanhosunglgu/WBS_Check",
+      "description": "설계 문서(.md)가 저장된 GitHub Repo 이름",
+      "task": "0.3.2",
+      "status": "확정"
+    },
+    {
+      "key": "DESIGN_DOC_PATH",
+      "type": "string",
+      "value": "WBS_Check/docs/design",
+      "description": "설계 문서가 위치한 Repo 내 디렉토리 경로",
+      "task": "0.3.2",
+      "status": "확정"
+    }
+  ]
+}

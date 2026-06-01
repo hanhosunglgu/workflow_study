@@ -1,0 +1,2077 @@
+{
+  "name": "WBS-INT",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wbs-int",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "int-0001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        950
+      ],
+      "webhookId": "wbs-int"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst owner = body.owner || $env.GITHUB_OWNER || '';\nlet repos = body.repos || [];\nif (typeof repos === 'string') { try { repos = JSON.parse(repos); } catch(e) { repos = [repos]; } }\nconst since = body.since || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();\nconst until = body.until || new Date().toISOString();\nconst ddaRepo = body.dda_repo || $env.DESIGN_DOC_REPO || '';\nconst ddaPath = body.dda_path || $env.DESIGN_DOC_PATH || 'docs/design';\nif (!owner) throw new Error('owner가 설정되지 않았습니다.');\nif (!repos.length) throw new Error('repos가 비어 있습니다.');\nconst ddaRepoName = ddaRepo.includes('/') ? ddaRepo.split('/').pop() : (ddaRepo || repos[0]);\nconst ddaOwner = ddaRepo.includes('/') ? ddaRepo.split('/')[0] : owner;\nreturn [{ json: { owner, repos, since, until, ddaOwner, ddaRepo: ddaRepoName, ddaPath } }];"
+      },
+      "id": "int-0002",
+      "name": "Init Params",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        950
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $('Init Params').first().json;\nreturn [{ json: { owner: input.owner, repos: input.repos, since: input.since, until: input.until } }];"
+      },
+      "id": "grc-init",
+      "name": "GRC Init",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/users/{{ $json.owner }}/repos?per_page=100&type=all",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "grc-repos",
+      "name": "GRC GET User Repos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// GitHub API 응답 평탄화 + GITHUB_REPOS 필터링 + 1 repo per item 변환\nconst initItem = $('Init Params').first().json;\nconst filterList = initItem.repos || [];\n\nconst allItems = $input.all();\nlet repoList = [];\nfor (const item of allItems) {\n  if (Array.isArray(item.json)) {\n    repoList = repoList.concat(item.json);\n  } else if (item.json && item.json.name) {\n    repoList.push(item.json);\n  }\n}\n\nconst filtered = filterList.length > 0\n  ? repoList.filter(r => filterList.includes(r.name))\n  : repoList;\n\nif (filtered.length === 0) {\n  throw new Error(`분석 대상 Repo 없음. filter=${JSON.stringify(filterList)}, 전체=${repoList.length}개`);\n}\n\nreturn filtered.map(r => ({\n  json: { owner: initItem.owner, repo: r.name, full_name: r.full_name }\n}));"
+      },
+      "id": "grc-filter",
+      "name": "GRC Filter & Split Repos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "grc-loop",
+      "name": "GRC Loop Over Repos",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1360,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/contents/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "grc-contents",
+      "name": "GRC GET Root Contents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// GET Root Contents 응답에서 파일 목록 추출\n// repo/full_name은 GET Root Contents 응답의 url 필드에서 추출\nconst fileData = $input.all();\n\nlet fileNames = [];\nlet full_name = '';\nlet repo = '';\n\nfor (const item of fileData) {\n  if (Array.isArray(item.json)) {\n    for (const f of item.json) {\n      if (f.name) fileNames.push(f.name);\n      // url 예: https://api.github.com/repos/owner/repo/contents/filename\n      if (!full_name && f.url) {\n        const m = f.url.match(/repos\\/([^/]+\\/[^/]+)\\/contents/);\n        if (m) { full_name = m[1]; repo = full_name.split('/')[1]; }\n      }\n    }\n  } else if (item.json && item.json.name) {\n    fileNames.push(item.json.name);\n    if (!full_name && item.json.url) {\n      const m = item.json.url.match(/repos\\/([^/]+\\/[^/]+)\\/contents/);\n      if (m) { full_name = m[1]; repo = full_name.split('/')[1]; }\n    }\n  }\n}\n\n// fallback: Filter & Split Repos의 첫 번째 아이템 사용 (단일 repo 필터 시)\nif (!full_name) {\n  const fallback = $('GRC Filter & Split Repos').first().json;\n  full_name = fallback.full_name || '';\n  repo = fallback.repo || '';\n}\n\nreturn [{\n  json: {\n    repo,\n    full_name,\n    file_names: fileNames\n  }\n}];"
+      },
+      "id": "grc-attach",
+      "name": "GRC Attach Repo Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 루트 파일 패턴으로 Repo 유형 분류 (5단계 우선순위)\nconst items = $input.all();\nconst classified = [];\n\nfor (const item of items) {\n  const { repo, file_names } = item.json;\n  const fileSet = new Set(file_names || []);\n  const fileArr = file_names || [];\n\n  let type = 'unknown';\n  let reason = '';\n\n  if (fileSet.has('Podfile') || fileSet.has('pubspec.yaml') || fileSet.has('Package.swift')) {\n    type = 'mobile';\n    reason = fileSet.has('Podfile') ? 'Podfile' : fileSet.has('pubspec.yaml') ? 'pubspec.yaml' : 'Package.swift';\n  } else if (fileSet.has('build.gradle') && !fileSet.has('package.json')) {\n    type = 'mobile'; reason = 'build.gradle';\n  } else if (fileArr.some(f => f.endsWith('.tf')) || fileSet.has('helmfile.yaml') || fileSet.has('terraform') || fileSet.has('k8s') || fileSet.has('infra')) {\n    type = 'config';\n    reason = fileArr.find(f => f.endsWith('.tf')) || 'helmfile/k8s/terraform';\n  } else if (fileSet.has('pom.xml') || fileSet.has('requirements.txt') || fileSet.has('go.mod') || fileSet.has('Cargo.toml') || fileSet.has('build.sbt') || (fileSet.has('package.json') && (fileSet.has('nest-cli.json') || fileSet.has('server.js') || fileSet.has('app.js') || fileSet.has('index.js')))) {\n    type = 'backend';\n    reason = fileSet.has('pom.xml') ? 'pom.xml' : fileSet.has('requirements.txt') ? 'requirements.txt' : fileSet.has('go.mod') ? 'go.mod' : fileSet.has('Cargo.toml') ? 'Cargo.toml' : 'package.json+server entry';\n  } else if (fileSet.has('package.json') && (fileSet.has('next.config.js') || fileSet.has('next.config.ts') || fileSet.has('vite.config.ts') || fileSet.has('vite.config.js') || fileSet.has('angular.json') || fileSet.has('vue.config.js') || fileSet.has('nuxt.config.ts') || fileSet.has('svelte.config.js'))) {\n    type = 'frontend';\n    reason = fileSet.has('next.config.js') || fileSet.has('next.config.ts') ? 'Next.js' : fileSet.has('vite.config.ts') || fileSet.has('vite.config.js') ? 'Vite' : fileSet.has('angular.json') ? 'Angular' : 'Vue/Nuxt/Svelte';\n  } else if (fileSet.has('package.json')) {\n    type = 'frontend'; reason = 'package.json (fallback)';\n  }\n\n  classified.push({ repo, type, reason });\n}\n\nconst result = { backend: [], frontend: [], config: [], mobile: [], unknown: [] };\nfor (const item of classified) result[item.type].push(item.repo);\n\nreturn [{ json: { ...result, _classified_detail: classified } }];"
+      },
+      "id": "grc-classify",
+      "name": "GRC Classify Repos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{ json: {\n  agent_id: 'WBS-GRC',\n  backend: data.backend || [],\n  frontend: data.frontend || [],\n  config: data.config || [],\n  mobile: data.mobile || [],\n  unknown: data.unknown || [],\n  _classified_detail: data._classified_detail || [],\n  error: null\n} }];"
+      },
+      "id": "grc-build",
+      "name": "GRC Build Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const init = $('Init Params').first().json;\nreturn [{ json: { owner: init.ddaOwner, repo: init.ddaRepo, path: init.ddaPath } }];"
+      },
+      "id": "dda-init",
+      "name": "DDA Init",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/contents/{{ $json.path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "dda-list",
+      "name": "DDA GET Design Doc List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nlet files = [];\nfor (const item of allItems) {\n  if (Array.isArray(item.json)) {\n    files = files.concat(item.json);\n  } else if (item.json && item.json.name) {\n    files.push(item.json);\n  }\n}\n\nconst mdFiles = files.filter(f => f.name && f.name.endsWith('.md') && f.type === 'file');\nif (mdFiles.length === 0) throw new Error('설계 문서(.md) 파일이 없습니다.');\n\nreturn mdFiles.map(f => ({ json: { name: f.name, url: f.url } }));"
+      },
+      "id": "dda-filter",
+      "name": "DDA Filter MD Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "dda-loop",
+      "name": "DDA Loop Over Files",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1360,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "dda-content",
+      "name": "DDA GET File Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst encoded = (item.content || '').replace(/\\n/g, '');\nconst decoded = Buffer.from(encoded, 'base64').toString('utf-8');\n\nlet name = item.name || '';\nif (!name && item.url) {\n  const m = item.url.match(/contents\\/.*\\/([^?]+)/);\n  if (m) name = m[1];\n}\n\nreturn [{ json: { name, content: decoded } }];"
+      },
+      "id": "dda-decode",
+      "name": "DDA Decode Base64",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 모든 파일 합산 후 Ollama 요청 body 생성\nconst items = $input.all();\nconst combined = items.map(i => `## ${i.json.name}\\n\\n${i.json.content}`).join('\\n\\n---\\n\\n');\n\n// 프롬프트 최소화: 구조만 추출하도록 간결하게\nconst prompt = 'Extract API endpoints, DB tables, and sequence steps from the docs below. Return ONLY JSON:\\n{\"endpoints\":[{\"method\":\"\",\"path\":\"\",\"description\":\"\"}],\"tables\":[{\"name\":\"\",\"columns\":[]}],\"sequences\":[{\"name\":\"\",\"steps\":[]}]}\\n\\nDocs:\\n' + combined.substring(0, 2000);\n\nreturn [{ json: { model: 'gpt-4.1-mini', messages: [{ role: 'user', content: prompt }], stream: false } }];"
+      },
+      "id": "dda-build",
+      "name": "DDA Build Ollama Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $json.model, messages: $json.messages, stream: $json.stream }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "dda-ollama",
+      "name": "DDA Ollama Extract Structure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1800,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.choices[0].message.content || '{}';\n\nlet parsed;\ntry {\n  const m = raw.match(/```json\\s*([\\s\\S]*?)```/) || raw.match(/(\\{[\\s\\S]*\\})/);\n  const jsonStr = m ? (m[1] || m[0]) : '{}';\n  parsed = JSON.parse(jsonStr.trim());\n} catch (e) {\n  parsed = { endpoints: [], tables: [], sequences: [], parse_error: raw.substring(0, 300) };\n}\n\nreturn [{ json: {\n  agent_id: 'WBS-DDA',\n  repo_type: 'design_doc',\n  endpoints: parsed.endpoints || [],\n  tables: parsed.tables || [],\n  sequences: parsed.sequences || [],\n  error: null\n} }];"
+      },
+      "id": "dda-parse",
+      "name": "DDA Parse & Build Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const init = $('Init Params').first().json;\nreturn init.repos.map(repo => ({ json: { owner: init.owner, repo, since: init.since, until: init.until } }));"
+      },
+      "id": "BAK-init",
+      "name": "BAK Init",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "BAK-loop",
+      "name": "BAK Loop Over Repos",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        920,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/commits?since={{ $json.since }}&until={{ $json.until }}&per_page=50",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "BAK-commits",
+      "name": "BAK GET Commits",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// commit 목록에서 SHA, 메시지, 활성 개발일 추출\nconst allItems = $input.all();\nlet commits = [];\nfor (const item of allItems) {\n  if (Array.isArray(item.json)) commits = commits.concat(item.json);\n  else if (item.json && item.json.sha) commits.push(item.json);\n}\n\n// 현재 루프 repo 정보 — url에서 추출\nlet owner = '', repo = '';\nif (commits.length > 0 && commits[0].url) {\n  const m = commits[0].url.match(/repos\\/([^/]+)\\/([^/]+)\\/commits/);\n  if (m) { owner = m[1]; repo = m[2]; }\n}\nif (!repo) {\n  // fallback: commit html_url\n  const c = commits[0] || {};\n  const m2 = (c.html_url || '').match(/github\\.com\\/([^/]+)\\/([^/]+)\\/commit/);\n  if (m2) { owner = m2[1]; repo = m2[2]; }\n}\n\nconst shas = commits.slice(0, 5).map(c => c.sha).filter(Boolean);\nconst commitMessages = commits.map(c => c.commit?.message || '').slice(0, 20);\nconst activeDays = new Set(commits.map(c => (c.commit?.author?.date || '').substring(0, 10)).filter(Boolean));\n\nreturn [{ json: { owner, repo, shas, commit_count: commits.length, active_days: activeDays.size, commit_messages: commitMessages } }];"
+      },
+      "id": "BAK-extract",
+      "name": "BAK Extract Commit Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/commits/{{ $json.shas[0] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "BAK-files",
+      "name": "BAK GET Commit Files",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 라우터/컨트롤러 파일 필터링 후 Ollama 요청 body 생성\nconst commitData = $input.first().json;\nconst allFiles = commitData.files || [];\nconst prevData = $('BAK Extract Commit Info').first().json;\n\nconst routerPatterns = ['routes/', 'controllers/', 'router.', 'controller.', 'handler.', 'api/', 'endpoints/', 'route.', 'routes.'];\nconst routerFiles = allFiles\n  .filter(f => f.filename && routerPatterns.some(p => f.filename.toLowerCase().includes(p)))\n  .map(f => ({ filename: f.filename, patch: (f.patch || '').substring(0, 800) }));\n\n// 라우터 파일 없으면 전체 파일 중 js/ts/py/java 파일 사용\nconst targetFiles = routerFiles.length > 0 ? routerFiles :\n  allFiles.filter(f => f.filename && /\\.(js|ts|py|java|go|rb)$/.test(f.filename))\n    .slice(0, 5)\n    .map(f => ({ filename: f.filename, patch: (f.patch || '').substring(0, 800) }));\n\nconst codeSnippet = JSON.stringify(targetFiles).substring(0, 2000);\nconst prompt = 'Analyze backend code changes and extract API endpoints and call flow. Return ONLY JSON:\\n{\"endpoints\":[{\"method\":\"\",\"path\":\"\",\"handler\":\"\"}],\"call_flow\":[{\"from\":\"\",\"to\":\"\",\"handler\":\"\",\"calls\":[]}]}\\n\\nCode changes:\\n' + codeSnippet;\n\nreturn [{ json: {\n  _meta: { repo: prevData.repo, owner: prevData.owner, commit_count: prevData.commit_count, active_days: prevData.active_days, commit_messages: prevData.commit_messages },\n  model: 'gpt-4.1-mini',\n  messages: [{ role: 'user', content: prompt }],\n  stream: false\n} }];"
+      },
+      "id": "BAK-build",
+      "name": "BAK Build Ollama Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $json.model, messages: $json.messages, stream: $json.stream }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "BAK-ollama",
+      "name": "BAK Ollama Extract Call Flow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.choices[0].message.content || '{}';\nconst meta = $('BAK Build Ollama Request').first().json._meta || {};\n\nlet parsed;\ntry {\n  const m = raw.match(/```json\\s*([\\s\\S]*?)```/) || raw.match(/(\\{[\\s\\S]*\\})/);\n  const jsonStr = m ? (m[1] || m[0]) : '{}';\n  parsed = JSON.parse(jsonStr.trim());\n} catch (e) {\n  parsed = { endpoints: [], call_flow: [] };\n}\n\nreturn [{ json: {\n  agent_id: 'WBS-BAK',\n  repo: meta.repo || '',\n  repo_type: 'backend',\n  call_flow: parsed.call_flow || [],\n  design_gaps: [],\n  commit_count: meta.commit_count || 0,\n  active_days: meta.active_days || 0,\n  extracted_endpoints: parsed.endpoints || [],\n  commit_messages: meta.commit_messages || [],\n  error: null\n} }];"
+      },
+      "id": "BAK-parse",
+      "name": "BAK Parse & Build Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 여러 repo 결과 취합\nconst items = $input.all();\nif (items.length === 1) return [items[0]];\nreturn [{ json: {\n  agent_id: 'WBS-BAK',\n  results: items.map(i => i.json),\n  error: null\n} }];"
+      },
+      "id": "BAK-agg",
+      "name": "BAK Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const init = $('Init Params').first().json;\nreturn init.repos.map(repo => ({ json: { owner: init.owner, repo, since: init.since, until: init.until } }));"
+      },
+      "id": "FRT-init",
+      "name": "FRT Init",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        1100
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "FRT-loop",
+      "name": "FRT Loop Over Repos",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        920,
+        1100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/commits?since={{ $json.since }}&until={{ $json.until }}&per_page=50",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "FRT-commits",
+      "name": "FRT GET Commits",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nlet commits = [];\nfor (const item of allItems) {\n  if (Array.isArray(item.json)) commits = commits.concat(item.json);\n  else if (item.json && item.json.sha) commits.push(item.json);\n}\n\nlet owner = '', repo = '';\nif (commits.length > 0) {\n  const c = commits[0];\n  const m = (c.url || '').match(/repos\\/([^/]+)\\/([^/]+)\\/commits/);\n  if (m) { owner = m[1]; repo = m[2]; }\n  if (!repo) {\n    const m2 = (c.html_url || '').match(/github\\.com\\/([^/]+)\\/([^/]+)\\/commit/);\n    if (m2) { owner = m2[1]; repo = m2[2]; }\n  }\n}\n\nconst shas = commits.slice(0, 5).map(c => c.sha).filter(Boolean);\nconst commitMessages = commits.map(c => c.commit?.message || '').slice(0, 20);\nconst activeDays = new Set(commits.map(c => (c.commit?.author?.date || '').substring(0, 10)).filter(Boolean));\n\nreturn [{ json: { owner, repo, shas, commit_count: commits.length, active_days: activeDays.size, commit_messages: commitMessages } }];"
+      },
+      "id": "FRT-extract",
+      "name": "FRT Extract Commit Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/commits/{{ $json.shas[0] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "FRT-files",
+      "name": "FRT GET Commit Files",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const commitData = $input.first().json;\nconst allFiles = commitData.files || [];\nconst prevData = $('FRT Extract Commit Info').first().json;\n\n// 프론트엔드 파일 필터링: 컴포넌트, 서비스, API 호출 패턴\nconst frontendPatterns = ['.tsx', '.jsx', '.vue', '.svelte', 'service.ts', 'service.js', '/api/', '/hooks/', '/store/', '/pages/', '/views/', '/components/'];\nconst frontendFiles = allFiles\n  .filter(f => f.filename && frontendPatterns.some(p => f.filename.toLowerCase().includes(p)))\n  .map(f => ({ filename: f.filename, patch: (f.patch || '').substring(0, 800) }));\n\n// 프론트엔드 파일 없으면 ts/js 파일 fallback\nconst targetFiles = frontendFiles.length > 0 ? frontendFiles :\n  allFiles.filter(f => f.filename && /\\.(tsx|jsx|ts|js|vue|svelte)$/.test(f.filename))\n    .slice(0, 5)\n    .map(f => ({ filename: f.filename, patch: (f.patch || '').substring(0, 800) }));\n\nconst codeSnippet = JSON.stringify(targetFiles).substring(0, 2000);\nconst prompt = 'Analyze frontend code changes and extract API calls and screen flow. Return ONLY JSON:\\n{\"api_calls\":[{\"method\":\"\",\"url\":\"\",\"component\":\"\"}],\"screen_flow\":[{\"from\":\"\",\"to\":\"\",\"trigger\":\"\"}],\"call_flow\":[{\"from\":\"\",\"to\":\"\",\"handler\":\"\",\"calls\":[]}]}\\n\\nCode changes:\\n' + codeSnippet;\n\nreturn [{ json: {\n  _meta: { repo: prevData.repo, owner: prevData.owner, commit_count: prevData.commit_count, active_days: prevData.active_days, commit_messages: prevData.commit_messages },\n  model: 'gpt-4.1-mini',\n  messages: [{ role: 'user', content: prompt }],\n  stream: false\n} }];"
+      },
+      "id": "FRT-build",
+      "name": "FRT Build Ollama Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $json.model, messages: $json.messages, stream: $json.stream }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "FRT-ollama",
+      "name": "FRT Ollama Extract API Calls",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.choices[0].message.content || '{}';\nconst meta = $('FRT Build Ollama Request').first().json._meta || {};\n\nlet parsed;\ntry {\n  const m = raw.match(/```json\\s*([\\s\\S]*?)```/) || raw.match(/(\\{[\\s\\S]*\\})/);\n  const jsonStr = m ? (m[1] || m[0]) : '{}';\n  parsed = JSON.parse(jsonStr.trim());\n} catch (e) {\n  parsed = { api_calls: [], screen_flow: [], call_flow: [] };\n}\n\nreturn [{ json: {\n  agent_id: 'WBS-FRT',\n  repo: meta.repo || '',\n  repo_type: 'frontend',\n  call_flow: parsed.call_flow || [],\n  design_gaps: [],\n  commit_count: meta.commit_count || 0,\n  active_days: meta.active_days || 0,\n  api_calls: parsed.api_calls || [],\n  screen_flow: parsed.screen_flow || [],\n  commit_messages: meta.commit_messages || [],\n  error: null\n} }];"
+      },
+      "id": "FRT-parse",
+      "name": "FRT Parse & Build Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nif (items.length === 1) return [items[0]];\nreturn [{ json: {\n  agent_id: 'WBS-FRT',\n  results: items.map(i => i.json),\n  error: null\n} }];"
+      },
+      "id": "FRT-agg",
+      "name": "FRT Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const init = $('Init Params').first().json;\nreturn init.repos.map(repo => ({ json: { owner: init.owner, repo, since: init.since, until: init.until } }));"
+      },
+      "id": "CFG-init",
+      "name": "CFG Init",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "CFG-loop",
+      "name": "CFG Loop Over Repos",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        920,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/commits?since={{ $json.since }}&until={{ $json.until }}&per_page=50",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "CFG-commits",
+      "name": "CFG GET Commits",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        1320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nlet commits = [];\nfor (const item of allItems) {\n  if (Array.isArray(item.json)) commits = commits.concat(item.json);\n  else if (item.json && item.json.sha) commits.push(item.json);\n}\n\nlet owner = '', repo = '';\nif (commits.length > 0) {\n  const m = (commits[0].url || '').match(/repos\\/([^/]+)\\/([^/]+)\\/commits/);\n  if (m) { owner = m[1]; repo = m[2]; }\n  if (!repo) {\n    const m2 = (commits[0].html_url || '').match(/github\\.com\\/([^/]+)\\/([^/]+)\\/commit/);\n    if (m2) { owner = m2[1]; repo = m2[2]; }\n  }\n}\n\nconst shas = commits.slice(0, 5).map(c => c.sha).filter(Boolean);\nconst commitMessages = commits.map(c => c.commit?.message || '').slice(0, 20);\nconst activeDays = new Set(commits.map(c => (c.commit?.author?.date || '').substring(0, 10)).filter(Boolean));\n\nreturn [{ json: { owner, repo, shas, commit_count: commits.length, active_days: activeDays.size, commit_messages: commitMessages } }];"
+      },
+      "id": "CFG-extract",
+      "name": "CFG Extract Commit Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        1320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/commits/{{ $json.shas[0] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "CFG-files",
+      "name": "CFG GET Commit Files",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        1320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const commitData = $input.first().json;\nconst allFiles = commitData.files || [];\nconst prevData = $('CFG Extract Commit Info').first().json;\n\n// IaC/Config 파일 필터링\nconst configPatterns = ['.tf', '.yaml', '.yml', 'dockerfile', 'helm/', 'k8s/', 'kubernetes/', 'docker-compose', '.hcl', 'helmfile', 'infra/', 'deploy/'];\nconst configFiles = allFiles\n  .filter(f => f.filename && configPatterns.some(p => f.filename.toLowerCase().includes(p)))\n  .map(f => ({ filename: f.filename, patch: (f.patch || '').substring(0, 800) }));\n\n// config 파일 없으면 전체 변경 파일 중 yaml/yml/json 사용\nconst targetFiles = configFiles.length > 0 ? configFiles :\n  allFiles.filter(f => f.filename && /\\.(yaml|yml|json|toml|ini|conf)$/.test(f.filename))\n    .slice(0, 5)\n    .map(f => ({ filename: f.filename, patch: (f.patch || '').substring(0, 800) }));\n\nconst codeSnippet = JSON.stringify(targetFiles).substring(0, 2000);\nconst prompt = 'Analyze IaC and config file changes. Extract infrastructure components and design gaps. Return ONLY JSON:\\n{\"components\":[{\"type\":\"\",\"name\":\"\",\"config\":\"\"}],\"call_flow\":[],\"design_gaps\":[{\"item\":\"\",\"discrepancy_type\":\"\",\"severity\":\"\",\"design\":\"\",\"actual\":\"\"}]}\\n\\nConfig changes:\\n' + codeSnippet;\n\nreturn [{ json: {\n  _meta: { repo: prevData.repo, owner: prevData.owner, commit_count: prevData.commit_count, active_days: prevData.active_days, commit_messages: prevData.commit_messages },\n  model: 'gpt-4.1-mini',\n  messages: [{ role: 'user', content: prompt }],\n  stream: false\n} }];"
+      },
+      "id": "CFG-build",
+      "name": "CFG Build Ollama Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        1320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $json.model, messages: $json.messages, stream: $json.stream }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "CFG-ollama",
+      "name": "CFG Ollama Extract Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        1320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.choices[0].message.content || '{}';\nconst meta = $('CFG Build Ollama Request').first().json._meta || {};\n\nlet parsed;\ntry {\n  const m = raw.match(/```json\\s*([\\s\\S]*?)```/) || raw.match(/(\\{[\\s\\S]*\\})/);\n  const jsonStr = m ? (m[1] || m[0]) : '{}';\n  parsed = JSON.parse(jsonStr.trim());\n} catch (e) {\n  parsed = { components: [], call_flow: [], design_gaps: [] };\n}\n\nreturn [{ json: {\n  agent_id: 'WBS-CFG',\n  repo: meta.repo || '',\n  repo_type: 'config',\n  call_flow: parsed.call_flow || [],\n  design_gaps: parsed.design_gaps || [],\n  commit_count: meta.commit_count || 0,\n  active_days: meta.active_days || 0,\n  components: parsed.components || [],\n  commit_messages: meta.commit_messages || [],\n  error: null\n} }];"
+      },
+      "id": "CFG-parse",
+      "name": "CFG Parse & Build Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        1320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nif (items.length === 1) return [items[0]];\nreturn [{ json: {\n  agent_id: 'WBS-CFG',\n  results: items.map(i => i.json),\n  error: null\n} }];"
+      },
+      "id": "CFG-agg",
+      "name": "CFG Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const init = $('Init Params').first().json;\nreturn init.repos.map(repo => ({ json: { owner: init.owner, repo, since: init.since, until: init.until } }));"
+      },
+      "id": "MOB-init",
+      "name": "MOB Init",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        1700
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "MOB-loop",
+      "name": "MOB Loop Over Repos",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        920,
+        1700
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/commits?since={{ $json.since }}&until={{ $json.until }}&per_page=50",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "MOB-commits",
+      "name": "MOB GET Commits",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1140,
+        1620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nlet commits = [];\nfor (const item of allItems) {\n  if (Array.isArray(item.json)) commits = commits.concat(item.json);\n  else if (item.json && item.json.sha) commits.push(item.json);\n}\n\nlet owner = '', repo = '';\nif (commits.length > 0) {\n  const m = (commits[0].url || '').match(/repos\\/([^/]+)\\/([^/]+)\\/commits/);\n  if (m) { owner = m[1]; repo = m[2]; }\n  if (!repo) {\n    const m2 = (commits[0].html_url || '').match(/github\\.com\\/([^/]+)\\/([^/]+)\\/commit/);\n    if (m2) { owner = m2[1]; repo = m2[2]; }\n  }\n}\n\nconst shas = commits.slice(0, 5).map(c => c.sha).filter(Boolean);\nconst commitMessages = commits.map(c => c.commit?.message || '').slice(0, 20);\nconst activeDays = new Set(commits.map(c => (c.commit?.author?.date || '').substring(0, 10)).filter(Boolean));\n\nreturn [{ json: { owner, repo, shas, commit_count: commits.length, active_days: activeDays.size, commit_messages: commitMessages } }];"
+      },
+      "id": "MOB-extract",
+      "name": "MOB Extract Commit Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        1620
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/commits/{{ $json.shas[0] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "MOB-files",
+      "name": "MOB GET Commit Files",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        1620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const commitData = $input.first().json;\nconst allFiles = commitData.files || [];\nconst prevData = $('MOB Extract Commit Info').first().json;\n\n// 모바일 파일 필터링: iOS/Android/Flutter 화면·서비스·뷰모델\nconst mobilePatterns = ['.swift', '.kt', '.dart', 'viewcontroller', 'screen.', 'activity.', 'fragment.', 'viewmodel.', '/screens/', '/views/', '/widgets/', '/services/', '/repositories/'];\nconst mobileFiles = allFiles\n  .filter(f => f.filename && mobilePatterns.some(p => f.filename.toLowerCase().includes(p)))\n  .map(f => ({ filename: f.filename, patch: (f.patch || '').substring(0, 800) }));\n\n// 모바일 파일 없으면 전체 변경 파일 중 swift/kt/dart 사용\nconst targetFiles = mobileFiles.length > 0 ? mobileFiles :\n  allFiles.filter(f => f.filename && /\\.(swift|kt|dart|java)$/.test(f.filename))\n    .slice(0, 5)\n    .map(f => ({ filename: f.filename, patch: (f.patch || '').substring(0, 800) }));\n\nconst codeSnippet = JSON.stringify(targetFiles).substring(0, 2000);\nconst prompt = 'Analyze mobile code changes (iOS/Android/Flutter) and extract screen flow and API calls. Return ONLY JSON:\\n{\"screen_flow\":[{\"from\":\"\",\"to\":\"\",\"trigger\":\"\"}],\"api_calls\":[{\"method\":\"\",\"url\":\"\",\"screen\":\"\"}],\"call_flow\":[{\"from\":\"\",\"to\":\"\",\"handler\":\"\",\"calls\":[]}],\"design_gaps\":[{\"item\":\"\",\"discrepancy_type\":\"\",\"severity\":\"\",\"design\":\"\",\"actual\":\"\"}]}\\n\\nMobile code:\\n' + codeSnippet;\n\nreturn [{ json: {\n  _meta: { repo: prevData.repo, owner: prevData.owner, commit_count: prevData.commit_count, active_days: prevData.active_days, commit_messages: prevData.commit_messages },\n  model: 'gpt-4.1-mini',\n  messages: [{ role: 'user', content: prompt }],\n  stream: false\n} }];"
+      },
+      "id": "MOB-build",
+      "name": "MOB Build Ollama Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        1620
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $json.model, messages: $json.messages, stream: $json.stream }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "MOB-ollama",
+      "name": "MOB Ollama Extract Screen Flow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2020,
+        1620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.choices[0].message.content || '{}';\nconst meta = $('MOB Build Ollama Request').first().json._meta || {};\n\nlet parsed;\ntry {\n  const m = raw.match(/```json\\s*([\\s\\S]*?)```/) || raw.match(/(\\{[\\s\\S]*\\})/);\n  const jsonStr = m ? (m[1] || m[0]) : '{}';\n  parsed = JSON.parse(jsonStr.trim());\n} catch (e) {\n  parsed = { screen_flow: [], api_calls: [], call_flow: [], design_gaps: [] };\n}\n\nreturn [{ json: {\n  agent_id: 'WBS-MOB',\n  repo: meta.repo || '',\n  repo_type: 'mobile',\n  call_flow: parsed.call_flow || [],\n  design_gaps: parsed.design_gaps || [],\n  commit_count: meta.commit_count || 0,\n  active_days: meta.active_days || 0,\n  screen_flow: parsed.screen_flow || [],\n  api_calls: parsed.api_calls || [],\n  commit_messages: meta.commit_messages || [],\n  error: null\n} }];"
+      },
+      "id": "MOB-parse",
+      "name": "MOB Parse & Build Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        1620
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nif (items.length === 1) return [items[0]];\nreturn [{ json: {\n  agent_id: 'WBS-MOB',\n  results: items.map(i => i.json),\n  error: null\n} }];"
+      },
+      "id": "MOB-agg",
+      "name": "MOB Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        1700
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const grc = $('GRC Build Output').first().json;\nconst dda = $('DDA Parse & Build Output').first().json;\nconst bak = $('BAK Aggregate Results').first().json;\nconst frt = $('FRT Aggregate Results').first().json;\nconst cfg = $('CFG Aggregate Results').first().json;\nconst mob = $('MOB Aggregate Results').first().json;\n\nconst agents = [\n  { id: 'WBS-GRC', r: grc },\n  { id: 'WBS-DDA', r: dda },\n  { id: 'WBS-BAK', r: bak },\n  { id: 'WBS-FRT', r: frt },\n  { id: 'WBS-CFG', r: cfg },\n  { id: 'WBS-MOB', r: mob }\n];\n\nconst summary = agents.map(a => {\n  const r = a.r || {};\n  const ok = !r.error;\n  const det = {};\n  if (a.id === 'WBS-GRC') {\n    det.classified = (r._classified_detail || []).map(i => ({ repo: i.repo, type: i.type, reason: i.reason }));\n  } else if (a.id === 'WBS-DDA') {\n    det.endpoint_count = (r.endpoints || []).length;\n    det.table_count = (r.tables || []).length;\n    det.sequence_count = (r.sequences || []).length;\n  } else if (a.id === 'WBS-BAK') {\n    const eps = r.endpoints || r.extracted_endpoints || [];\n    det.endpoint_count = eps.length;\n    det.call_flow_count = (r.call_flow || []).length;\n  } else if (a.id === 'WBS-FRT') {\n    det.api_call_count = (r.api_calls || []).length;\n    det.screen_flow_count = (r.screen_flow || []).length;\n  } else if (a.id === 'WBS-CFG') {\n    const gaps = r.design_gaps || [];\n    det.component_count = (r.components || []).length;\n    det.design_gap_count = gaps.length;\n    det.high_severity = gaps.filter(g => (g.severity||'').toLowerCase() === 'high').length;\n  } else if (a.id === 'WBS-MOB') {\n    det.screen_flow_count = (r.screen_flow || []).length;\n    det.api_call_count = (r.api_calls || []).length;\n    det.design_gap_count = (r.design_gaps || []).length;\n  }\n  return {\n    agent_id: a.id,\n    status: ok ? 'PASS' : 'FAIL',\n    repo: r.repo || '',\n    repo_type: r.repo_type || '',\n    commit_count: r.commit_count || 0,\n    active_days: r.active_days || 0,\n    error: r.error || null,\n    details: det\n  };\n});\n\nconst passed = summary.filter(s => s.status === 'PASS').length;\nreturn [{ json: {\n  test_id: 'WBS-INT-PHASE1',\n  tested_at: new Date().toISOString(),\n  total: agents.length,\n  passed,\n  failed: agents.length - passed,\n  result: passed === agents.length ? 'ALL_PASS' : 'PARTIAL_FAIL',\n  agents: summary,\n  raw: { grc, dda, bak, frt, cfg, mob }\n} }];"
+      },
+      "id": "int-report",
+      "name": "Build Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3000,
+        950
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "int-respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3220,
+        950
+      ]
+    },
+    {
+      "id": "note-common",
+      "name": "Note: Entry Point",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        100,
+        860
+      ],
+      "parameters": {
+        "content": "## 🚀 WBS-INT — Phase 1 통합 워크플로\n\n**역할**: 6개 Specialist Agent를 순차 실행하여\n설계 적합성 분석 결과를 통합 리포트로 반환\n\n**입력 파라미터**:\n- `owner`: GitHub 계정명\n- `repos[]`: 분석 대상 Repo 목록\n- `dda_repo`: 설계 문서 Repo (owner/repo 형식)\n- `dda_path`: 설계 문서 경로 (예: docs/design)\n- `since` / `until`: 분석 기간 (기본: 최근 7일)\n\n**실행 순서**: GRC → DDA → BAK → FRT → CFG → MOB → Report\n\n**예상 소요시간**: 약 7~8분 (Ollama CPU 기준)",
+        "height": 280,
+        "width": 380,
+        "color": 7
+      }
+    },
+    {
+      "id": "note-grc",
+      "name": "Note: WBS-GRC",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        650,
+        30
+      ],
+      "parameters": {
+        "content": "## 📂 WBS-GRC — Repo 분류기\n\n**목적**: GitHub Repo를 파일 패턴으로 자동 분류\n\n**처리 흐름**:\n1. `GET /users/{owner}/repos` — 전체 Repo 목록 조회\n2. Filter & Split — `repos[]` 입력값으로 필터링\n3. SplitInBatches 루프 — Repo별 루트 파일 목록 조회\n4. Classify — 파일 패턴 기반 5단계 우선순위 분류\n   - 🟣 mobile: .swift/.kt/.dart/ViewController\n   - 🟠 config: .tf/.yaml/Dockerfile/docker-compose\n   - 🔵 backend: routes/controllers/server.js\n   - 🟢 frontend: .tsx/.vue/vite.config/package.json\n   - ⚪ unknown: 패턴 미해당\n\n**출력**: `{ backend[], frontend[], config[], mobile[], _classified_detail[] }`",
+        "height": 300,
+        "width": 1700,
+        "color": 4
+      }
+    },
+    {
+      "id": "note-dda",
+      "name": "Note: WBS-DDA",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        650,
+        330
+      ],
+      "parameters": {
+        "content": "## 📄 WBS-DDA — 설계 문서 분석기\n\n**목적**: GitHub의 설계 문서(.md)를 파싱하여 API 명세/ERD/시퀀스 구조 추출\n\n**처리 흐름**:\n1. `GET /repos/{owner}/{repo}/contents/{path}` — 설계 문서 디렉토리 목록 조회\n2. Filter MD Files — .md 파일만 필터링\n3. SplitInBatches 루프 — 파일별 내용 조회 → Base64 디코딩\n4. Build Ollama Request — 전체 문서 합산 후 프롬프트 구성 (2000자 제한)\n5. OpenAI (gpt-4.1-mini) — 구조 추출\n\n**Ollama 프롬프트 목표**: endpoints[], tables[], sequences[] 추출\n\n**출력**: `{ agent_id:'WBS-DDA', endpoints[], tables[], sequences[] }`\n\n⚠️ 입력: `{ owner, repo, path }` — repos[] 배열 아님",
+        "height": 260,
+        "width": 1700,
+        "color": 5
+      }
+    },
+    {
+      "id": "note-bak",
+      "name": "Note: WBS-BAK",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        650,
+        630
+      ],
+      "parameters": {
+        "content": "## 🔧 WBS-BAK — Backend 코드 분석기\n\n**목적**: Backend Repo의 최신 커밋에서 API 엔드포인트 및 Call Flow 추출\n\n**처리 흐름**:\n1. SplitInBatches 루프 — Repo별 처리\n2. `GET /repos/{owner}/{repo}/commits` — 최근 커밋 목록 조회 (since~until)\n3. Extract Commit Info — 커밋 SHA 추출, owner/repo를 URL 파싱으로 확보\n4. `GET /repos/{owner}/{repo}/commits/{sha}` — 최신 커밋 변경 파일 목록\n5. Build Ollama Request — Backend 파일 필터링 후 프롬프트 구성\n   - 필터: routes/ controllers/ .router.js server.js app.js\n6. Ollama — API 엔드포인트 및 Call Flow 추출\n\n**출력**: `{ agent_id:'WBS-BAK', repo_type:'backend', extracted_endpoints[], call_flow[], commit_count, active_days }`",
+        "height": 260,
+        "width": 1700,
+        "color": 3
+      }
+    },
+    {
+      "id": "note-frt",
+      "name": "Note: WBS-FRT",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        650,
+        930
+      ],
+      "parameters": {
+        "content": "## 🎨 WBS-FRT — Frontend 코드 분석기\n\n**목적**: Frontend Repo의 최신 커밋에서 API 호출 패턴 및 화면 흐름 추출\n\n**처리 흐름**:\n1. SplitInBatches 루프 — Repo별 처리\n2. 커밋 목록 → 최신 커밋 변경 파일 조회\n3. Build Ollama Request — Frontend 파일 필터링 후 프롬프트 구성\n   - 필터: .tsx .jsx .vue .svelte service.ts service.js /api/ /hooks/ /store/ /pages/ /views/ /components/\n4. Ollama — API 호출 패턴(fetch/axios URL, method) 및 화면 흐름 추출\n\n**출력**: `{ agent_id:'WBS-FRT', repo_type:'frontend', api_calls[], screen_flow[], call_flow[], commit_count, active_days }`",
+        "height": 240,
+        "width": 1700,
+        "color": 6
+      }
+    },
+    {
+      "id": "note-cfg",
+      "name": "Note: WBS-CFG",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        650,
+        1220
+      ],
+      "parameters": {
+        "content": "## ⚙️ WBS-CFG — IaC/Config 분석기\n\n**목적**: IaC 및 설정 파일에서 인프라 구성 요소 추출 및 설계 Gap 식별\n\n**처리 흐름**:\n1. SplitInBatches 루프 — Repo별 처리\n2. 커밋 목록 → 최신 커밋 변경 파일 조회\n3. Build Ollama Request — Config 파일 필터링 후 프롬프트 구성\n   - 필터: .tf .yaml .yml dockerfile helm/ k8s/ kubernetes/ docker-compose .hcl helmfile infra/ deploy/\n4. Ollama — 서비스/볼륨/네트워크 컴포넌트 추출 및 보안 Gap 분석\n\n**출력**: `{ agent_id:'WBS-CFG', repo_type:'config', components[], design_gaps[], call_flow[], commit_count, active_days }`\n\n📌 design_gaps severity: high / medium / low",
+        "height": 250,
+        "width": 1700,
+        "color": 2
+      }
+    },
+    {
+      "id": "note-mob",
+      "name": "Note: WBS-MOB",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        650,
+        1520
+      ],
+      "parameters": {
+        "content": "## 📱 WBS-MOB — Mobile 코드 분석기\n\n**목적**: iOS/Android/Flutter 코드에서 화면 흐름 및 API 호출 시퀀스 추출\n\n**처리 흐름**:\n1. SplitInBatches 루프 — Repo별 처리\n2. 커밋 목록 → 최신 커밋 변경 파일 조회\n3. Build Ollama Request — Mobile 파일 필터링 후 프롬프트 구성\n   - 필터: .swift .kt .dart viewcontroller screen. activity. fragment. viewmodel. /screens/ /views/ /widgets/ /services/ /repositories/\n   - Fallback: .swift .kt .dart .java 파일\n4. Ollama — 화면 전환 흐름, API 호출, 설계 Gap 추출\n\n**출력**: `{ agent_id:'WBS-MOB', repo_type:'mobile', screen_flow[], api_calls[], design_gaps[], commit_count, active_days }`",
+        "height": 260,
+        "width": 1700,
+        "color": 1
+      }
+    },
+    {
+      "id": "note-report",
+      "name": "Note: Report",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2900,
+        760
+      ],
+      "parameters": {
+        "content": "## 📊 Build Report — 통합 리포트 생성\n\n**목적**: 6개 Agent 결과를 종합하여 Phase 1 통합 리포트 반환\n\n**집계 항목**:\n- WBS-GRC: 분류된 Repo 목록 및 타입\n- WBS-DDA: endpoint_count / table_count / sequence_count\n- WBS-BAK: endpoint_count / call_flow_count\n- WBS-FRT: api_call_count / screen_flow_count\n- WBS-CFG: component_count / design_gap_count / high_severity\n- WBS-MOB: screen_flow_count / api_call_count / design_gap_count\n\n**PASS 판정 기준**: `error` 필드가 null이고 `agent_id` 존재\n\n**출력 스키마**:\n```json\n{\n  \"test_id\": \"WBS-INT-PHASE1\",\n  \"result\": \"ALL_PASS | PARTIAL_FAIL\",\n  \"passed\": 6,\n  \"total\": 6,\n  \"agents\": [...],\n  \"raw\": { grc, dda, bak, frt, cfg, mob }\n}\n```",
+        "height": 380,
+        "width": 380,
+        "color": 7
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Init Params",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Init Params": {
+      "main": [
+        [
+          {
+            "node": "GRC Init",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "GRC Init": {
+      "main": [
+        [
+          {
+            "node": "GRC GET User Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "GRC GET User Repos": {
+      "main": [
+        [
+          {
+            "node": "GRC Filter & Split Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "GRC Filter & Split Repos": {
+      "main": [
+        [
+          {
+            "node": "GRC Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "GRC Loop Over Repos": {
+      "main": [
+        [
+          {
+            "node": "GRC Build Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GRC GET Root Contents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GRC GET Root Contents": {
+      "main": [
+        [
+          {
+            "node": "GRC Attach Repo Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "GRC Attach Repo Info": {
+      "main": [
+        [
+          {
+            "node": "GRC Classify Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "GRC Classify Repos": {
+      "main": [
+        [
+          {
+            "node": "GRC Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "GRC Build Output": {
+      "main": [
+        [
+          {
+            "node": "DDA Init",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "DDA Init": {
+      "main": [
+        [
+          {
+            "node": "DDA GET Design Doc List",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "DDA GET Design Doc List": {
+      "main": [
+        [
+          {
+            "node": "DDA Filter MD Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "DDA Filter MD Files": {
+      "main": [
+        [
+          {
+            "node": "DDA Loop Over Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "DDA Loop Over Files": {
+      "main": [
+        [
+          {
+            "node": "DDA Build Ollama Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "DDA GET File Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DDA GET File Content": {
+      "main": [
+        [
+          {
+            "node": "DDA Decode Base64",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "DDA Decode Base64": {
+      "main": [
+        [
+          {
+            "node": "DDA Loop Over Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "DDA Build Ollama Request": {
+      "main": [
+        [
+          {
+            "node": "DDA Ollama Extract Structure",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "DDA Ollama Extract Structure": {
+      "main": [
+        [
+          {
+            "node": "DDA Parse & Build Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "DDA Parse & Build Output": {
+      "main": [
+        [
+          {
+            "node": "BAK Init",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "BAK Init": {
+      "main": [
+        [
+          {
+            "node": "BAK Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "BAK Loop Over Repos": {
+      "main": [
+        [
+          {
+            "node": "BAK Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "BAK GET Commits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BAK GET Commits": {
+      "main": [
+        [
+          {
+            "node": "BAK Extract Commit Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "BAK Extract Commit Info": {
+      "main": [
+        [
+          {
+            "node": "BAK GET Commit Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "BAK GET Commit Files": {
+      "main": [
+        [
+          {
+            "node": "BAK Build Ollama Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "BAK Build Ollama Request": {
+      "main": [
+        [
+          {
+            "node": "BAK Ollama Extract Call Flow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "BAK Ollama Extract Call Flow": {
+      "main": [
+        [
+          {
+            "node": "BAK Parse & Build Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "BAK Parse & Build Output": {
+      "main": [
+        [
+          {
+            "node": "BAK Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "BAK Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "FRT Init",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "FRT Init": {
+      "main": [
+        [
+          {
+            "node": "FRT Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "FRT Loop Over Repos": {
+      "main": [
+        [
+          {
+            "node": "FRT Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "FRT GET Commits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FRT GET Commits": {
+      "main": [
+        [
+          {
+            "node": "FRT Extract Commit Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "FRT Extract Commit Info": {
+      "main": [
+        [
+          {
+            "node": "FRT GET Commit Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "FRT GET Commit Files": {
+      "main": [
+        [
+          {
+            "node": "FRT Build Ollama Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "FRT Build Ollama Request": {
+      "main": [
+        [
+          {
+            "node": "FRT Ollama Extract API Calls",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "FRT Ollama Extract API Calls": {
+      "main": [
+        [
+          {
+            "node": "FRT Parse & Build Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "FRT Parse & Build Output": {
+      "main": [
+        [
+          {
+            "node": "FRT Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "FRT Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "CFG Init",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "CFG Init": {
+      "main": [
+        [
+          {
+            "node": "CFG Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "CFG Loop Over Repos": {
+      "main": [
+        [
+          {
+            "node": "CFG Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "CFG GET Commits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CFG GET Commits": {
+      "main": [
+        [
+          {
+            "node": "CFG Extract Commit Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "CFG Extract Commit Info": {
+      "main": [
+        [
+          {
+            "node": "CFG GET Commit Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "CFG GET Commit Files": {
+      "main": [
+        [
+          {
+            "node": "CFG Build Ollama Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "CFG Build Ollama Request": {
+      "main": [
+        [
+          {
+            "node": "CFG Ollama Extract Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "CFG Ollama Extract Config": {
+      "main": [
+        [
+          {
+            "node": "CFG Parse & Build Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "CFG Parse & Build Output": {
+      "main": [
+        [
+          {
+            "node": "CFG Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "CFG Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "MOB Init",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "MOB Init": {
+      "main": [
+        [
+          {
+            "node": "MOB Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "MOB Loop Over Repos": {
+      "main": [
+        [
+          {
+            "node": "MOB Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "MOB GET Commits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MOB GET Commits": {
+      "main": [
+        [
+          {
+            "node": "MOB Extract Commit Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "MOB Extract Commit Info": {
+      "main": [
+        [
+          {
+            "node": "MOB GET Commit Files",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "MOB GET Commit Files": {
+      "main": [
+        [
+          {
+            "node": "MOB Build Ollama Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "MOB Build Ollama Request": {
+      "main": [
+        [
+          {
+            "node": "MOB Ollama Extract Screen Flow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "MOB Ollama Extract Screen Flow": {
+      "main": [
+        [
+          {
+            "node": "MOB Parse & Build Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "MOB Parse & Build Output": {
+      "main": [
+        [
+          {
+            "node": "MOB Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "MOB Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Build Report": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": ""
+  }
+}

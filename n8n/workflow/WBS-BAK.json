@@ -1,0 +1,402 @@
+{
+  "name": "WBS-BAK",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wbs-bak",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "06b7cbbb-0c01-42fd-81b0-651c3cb6ab85",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        464,
+        -80
+      ],
+      "webhookId": "wbs-bak"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst owner = body.owner || $env.GITHUB_OWNER || '';\nlet repos = body.repos || [];\nif (typeof repos === 'string') { try { repos = JSON.parse(repos); } catch(e) { repos = [repos]; } }\nconst since = body.since || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();\nconst until = body.until || new Date().toISOString();\nif (!owner) throw new Error('owner가 설정되지 않았습니다.');\nif (!repos.length) throw new Error('repos가 비어 있습니다.');\nreturn repos.map(repo => ({ json: { owner, repo, since, until } }));"
+      },
+      "id": "dd0d7427-a8cb-4dad-8312-399d29b26e5f",
+      "name": "Init Params",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/commits?since={{ $json.since }}&until={{ $json.until }}&per_page=50",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "id": "805c0aaa-0ed5-4f55-af98-73515cf00af4",
+      "name": "GET Commits",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        -224
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eLRk8UEJ3iN7jUrm",
+          "name": "GitHub PAT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// fullResponse:true 모드에서 응답 body를 추출, 커밋 0개여도 항상 1개 아이템 반환\nconst resp = $input.first().json;\nconst commits = Array.isArray(resp.body) ? resp.body : (Array.isArray(resp) ? resp : []);\nconst initItem = $('Init Params').first().json;\nreturn [{ json: { commits, owner: initItem.owner, repo: initItem.repo, since: initItem.since, until: initItem.until } }];"
+      },
+      "id": "wrap-commits-bak",
+      "name": "Wrap Commits",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        -224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const d = $input.first().json;\nconst commits = d.commits || [];\nconst owner = d.owner || \"\";\nconst repo = d.repo || \"\";\n\nconst shas = commits.slice(0, 5).map(c => c.sha).filter(Boolean);\nconst commitMessages = commits.map(c => c.commit?.message || \"\").slice(0, 20);\nconst activeDays = new Set(commits.map(c => (c.commit?.author?.date || \"\").substring(0, 10)).filter(Boolean));\n\n// 커밋 0개면 OpenAI 호출 없이 빈 결과 바로 반환\nif (commits.length === 0) {\n  return [{ json: {\n    _skip_llm: true,\n    agent_id: \"WBS-BAK\",\n    repo,\n    repo_type: \"backend\",\n    call_flow: [],\n    design_gaps: [],\n    commit_count: 0,\n    active_days: 0,\n    extracted_endpoints: [],\n    commit_messages: [],\n    error: null\n  } }];\n}\n\nreturn [{ json: { owner, repo, shas, commit_count: commits.length, active_days: activeDays.size, commit_messages: commitMessages } }];"
+      },
+      "id": "027549dc-2452-49fe-b5b7-920b8e2f39f1",
+      "name": "Extract Commit Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        -224
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/commits/{{ $json.shas[0] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "4b2ba6b0-5073-4a50-a25d-657b8c1bbf98",
+      "name": "GET Commit Files",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        -224
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eLRk8UEJ3iN7jUrm",
+          "name": "GitHub PAT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 커밋 없는 경우 skip 패스스루\nconst prevData = $('Extract Commit Info').first().json;\nif (prevData._skip_llm) {\n  return [{ json: { _skip_llm: true, _passthrough: prevData } }];\n}\n\n// 라우터/컨트롤러 파일 필터링 후 OpenAI 요청 body 생성\nconst commitData = $input.first().json;\nconst allFiles = commitData.files || [];\n\nconst routerPatterns = ['routes/', 'controllers/', 'router.', 'controller.', 'handler.', 'api/', 'endpoints/', 'route.', 'routes.'];\nconst routerFiles = allFiles\n  .filter(f => f.filename && routerPatterns.some(p => f.filename.toLowerCase().includes(p)))\n  .map(f => ({ filename: f.filename, patch: (f.patch || '').substring(0, 800) }));\n\n// 라우터 파일 없으면 전체 파일 중 js/ts/py/java 파일 사용\nconst targetFiles = routerFiles.length > 0 ? routerFiles :\n  allFiles.filter(f => f.filename && /\\.(js|ts|py|java|go|rb)$/.test(f.filename))\n    .slice(0, 5)\n    .map(f => ({ filename: f.filename, patch: (f.patch || '').substring(0, 800) }));\n\nconst codeSnippet = JSON.stringify(targetFiles).substring(0, 2000);\nconst prompt = 'Analyze backend code changes and extract API endpoints and call flow. Return ONLY JSON:\\n{\"endpoints\":[{\"method\":\"\",\"path\":\"\",\"handler\":\"\"}],\"call_flow\":[{\"from\":\"\",\"to\":\"\",\"handler\":\"\",\"calls\":[]}]}\\n\\nCode changes:\\n' + codeSnippet;\n\nreturn [{ json: {\n  _meta: { repo: prevData.repo, owner: prevData.owner, commit_count: prevData.commit_count, active_days: prevData.active_days, commit_messages: prevData.commit_messages },\n  model: 'gpt-4.1-mini',\n  messages: [{ role: 'user', content: prompt }],\n  stream: false\n} }];"
+      },
+      "id": "d1e6f012-f678-4b39-b052-b2be53a12cbd",
+      "name": "Build Ollama Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -224
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $json.model, messages: $json.messages, stream: $json.stream }) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "346bcc81-af27-4375-b8f2-c9ee0666b077",
+      "name": "Ollama Extract Call Flow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        -224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 커밋 없는 skip 패스스루 처리\nconst buildReq = $('Build Ollama Request').first().json;\nif (buildReq._skip_llm) {\n  return [{ json: buildReq._passthrough }];\n}\n\nconst raw = $input.first().json.choices?.[0]?.message?.content || '{}';\nconst meta = buildReq._meta || {};\n\nlet parsed;\ntry {\n  const m = raw.match(/```json\\s*([\\s\\S]*?)```/) || raw.match(/(\\{[\\s\\S]*\\})/);\n  const jsonStr = m ? (m[1] || m[0]) : '{}';\n  parsed = JSON.parse(jsonStr.trim());\n} catch (e) {\n  parsed = { endpoints: [], call_flow: [] };\n}\n\nreturn [{ json: {\n  agent_id: 'WBS-BAK',\n  repo: meta.repo || '',\n  repo_type: 'backend',\n  call_flow: parsed.call_flow || [],\n  design_gaps: [],\n  commit_count: meta.commit_count || 0,\n  active_days: meta.active_days || 0,\n  extracted_endpoints: parsed.endpoints || [],\n  commit_messages: meta.commit_messages || [],\n  error: null\n} }];"
+      },
+      "id": "d0759ed1-3590-4c16-ae0c-c8fe73b51240",
+      "name": "Parse & Build Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        -224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 여러 repo 결과 취합\nconst items = $input.all();\nif (items.length === 1) return [items[0]];\nreturn [{ json: {\n  agent_id: 'WBS-BAK',\n  results: items.map(i => i.json),\n  error: null\n} }];"
+      },
+      "id": "2bff0937-3cad-4e57-bc13-d8f47e0d0480",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2448,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "fb9d29c7-f32c-4297-a0c5-ad117a246d18",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2672,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-llm-check",
+              "leftValue": "={{ $json._skip_llm }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-skip-llm-bak",
+      "name": "Skip LLM?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1900,
+        -224
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Init Params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Params": {
+      "main": [
+        [
+          {
+            "node": "GET Commits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Commits": {
+      "main": [
+        [
+          {
+            "node": "Wrap Commits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Commit Info": {
+      "main": [
+        [
+          {
+            "node": "GET Commit Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Commit Files": {
+      "main": [
+        [
+          {
+            "node": "Build Ollama Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Ollama Request": {
+      "main": [
+        [
+          {
+            "node": "Skip LLM?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Extract Call Flow": {
+      "main": [
+        [
+          {
+            "node": "Parse & Build Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Build Output": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wrap Commits": {
+      "main": [
+        [
+          {
+            "node": "Extract Commit Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip LLM?": {
+      "main": [
+        [
+          {
+            "node": "Parse & Build Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ollama Extract Call Flow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": ""
+  }
+}

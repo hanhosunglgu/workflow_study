@@ -1,0 +1,414 @@
+{
+  "name": "WBS-JRA",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wbs-jra",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "jra-0001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "wbs-jra"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\n\nconst boardId = body.board_id || $env.JIRA_BOARD_ID || '8207';\nconst baseUrl = body.base_url || $env.JIRA_BASE_URL || 'https://lgucorp.atlassian.net';\nconst projectKeys = body.project_keys ||\n  (() => { try { return JSON.parse($env.JIRA_PROJECT_KEYS || '[\"WBS\"]'); } catch(e) { return ['WBS']; } })();\nconst commitMessages = body.commit_messages || [];\n\nif (!boardId) throw new Error('board_id가 설정되지 않았습니다.');\n\nreturn [{ json: { boardId, baseUrl, projectKeys, commitMessages } }];"
+      },
+      "id": "jra-0002",
+      "name": "Init Params",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.baseUrl }}/rest/agile/1.0/board/{{ $json.boardId }}/sprint?maxResults=50",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Jira API Token"
+        }
+      },
+      "id": "jra-0003",
+      "name": "GET Active Sprint",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sprintData = $input.first().json;\nconst prevParams = $('Init Params').first().json;\n\nconst allSprints = sprintData.values || [];\n// simple board type은 ?state=active 필터 미지원 → 코드에서 필터링\nconst sprints = allSprints.filter(s => s.state === 'active');\n\nif (!sprints.length) {\n  throw new Error('활성 Sprint가 없습니다. Board ID: ' + prevParams.boardId);\n}\n\nconst sprint = sprints[0];\nreturn [{ json: {\n  boardId: prevParams.boardId,\n  baseUrl: prevParams.baseUrl,\n  projectKeys: prevParams.projectKeys,\n  commitMessages: prevParams.commitMessages,\n  sprintId: sprint.id,\n  sprintName: sprint.name,\n  sprintState: sprint.state,\n  sprintStartDate: sprint.startDate || null,\n  sprintEndDate: sprint.endDate || null\n} }];"
+      },
+      "id": "jra-0004",
+      "name": "Extract Sprint ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 첫 페이지 조회를 위한 초기 파라미터 설정\nconst data = $input.first().json;\nreturn [{ json: {\n  boardId: data.boardId,\n  baseUrl: data.baseUrl,\n  projectKeys: data.projectKeys,\n  commitMessages: data.commitMessages,\n  sprintId: data.sprintId,\n  sprintName: data.sprintName,\n  sprintState: data.sprintState,\n  sprintStartDate: data.sprintStartDate,\n  sprintEndDate: data.sprintEndDate,\n  startAt: 0,\n  maxResults: 100,\n  allIssues: []\n} }];"
+      },
+      "id": "jra-0005",
+      "name": "Init Pagination",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "jra-0006",
+      "name": "Pagination Loop",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.baseUrl }}/rest/agile/1.0/sprint/{{ $json.sprintId }}/issue?startAt={{ $json.startAt }}&maxResults={{ $json.maxResults }}&fields=summary,status,story_points,customfield_10016,assignee,issuetype",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "Jira API Token"
+        }
+      },
+      "id": "jra-0007",
+      "name": "GET Sprint Issues",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1560,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const pageData = $input.first().json;\nconst loopState = $('Pagination Loop').first().json;\n\nconst issues = pageData.issues || [];\nconst total = pageData.total || 0;\nconst nextStart = loopState.startAt + issues.length;\n\n// 누적 이슈 합산\nconst accumulated = (loopState.allIssues || []).concat(\n  issues.map(issue => ({\n    key: issue.key,\n    summary: issue.fields?.summary || '',\n    status: issue.fields?.status?.name || 'Unknown',\n    statusCategory: issue.fields?.status?.statusCategory?.name || 'Unknown',\n    storyPoints: issue.fields?.customfield_10016 || issue.fields?.story_points || null,\n    issueType: issue.fields?.issuetype?.name || 'Task',\n    assignee: issue.fields?.assignee?.displayName || null\n  }))\n);\n\nconst hasMore = nextStart < total && issues.length > 0;\n\nreturn [{ json: {\n  boardId: loopState.boardId,\n  baseUrl: loopState.baseUrl,\n  projectKeys: loopState.projectKeys,\n  commitMessages: loopState.commitMessages,\n  sprintId: loopState.sprintId,\n  sprintName: loopState.sprintName,\n  sprintState: loopState.sprintState,\n  sprintStartDate: loopState.sprintStartDate,\n  sprintEndDate: loopState.sprintEndDate,\n  startAt: nextStart,\n  maxResults: loopState.maxResults,\n  allIssues: accumulated,\n  total,\n  hasMore\n} }];"
+      },
+      "id": "jra-0008",
+      "name": "Accumulate Issues",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-has-more",
+              "leftValue": "={{ $json.hasMore }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "jra-0009",
+      "name": "Has More Pages?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst issues = data.allIssues || [];\n\nconst statusMap = { todo: 0, in_progress: 0, in_review: 0, done: 0, other: 0 };\nconst doneTitles = new Set();\nconst inProgressTitles = new Set();\n\nfor (const issue of issues) {\n  const s = (issue.status || '').toLowerCase().trim();\n  const cat = (issue.statusCategory || '').toLowerCase().trim();\n\n  const isDone = cat === 'done' || cat === '완료'\n    || s === 'done' || s === '완료' || s === 'closed' || s === 'resolved';\n  const isReview = s.includes('review') || s.includes('pr') || s.includes('testing') || s.includes('qa');\n  const isInProgress = cat === 'indeterminate' || cat === '진행 중'\n    || s === 'in progress' || s === '진행 중'\n    || s.includes('progress') || s.includes('doing') || s.includes('dev') || s.includes('wip');\n  const isTodo = cat === 'new' || cat === '해야 할 일'\n    || s === 'to do' || s === 'todo' || s === '해야 할 일' || s === 'open' || s === 'backlog';\n\n  if (isDone) {\n    statusMap.done++;\n    doneTitles.add(issue.key + ' ' + issue.summary.substring(0, 40));\n  } else if (isReview) {\n    statusMap.in_review++;\n    inProgressTitles.add(issue.key + ' ' + issue.summary.substring(0, 40));\n  } else if (isInProgress) {\n    statusMap.in_progress++;\n    inProgressTitles.add(issue.key + ' ' + issue.summary.substring(0, 40));\n  } else if (isTodo) {\n    statusMap.todo++;\n  } else {\n    statusMap.other++;\n  }\n}\n\nconst allSP = issues.map(i => i.storyPoints).filter(sp => sp !== null && sp !== undefined);\nconst spTotal = allSP.reduce((acc, sp) => acc + (Number(sp) || 0), 0);\nconst doneSP = issues\n  .filter(i => {\n    const s = (i.status || '').toLowerCase().trim();\n    const cat = (i.statusCategory || '').toLowerCase().trim();\n    return cat === 'done' || cat === '완료' || s === 'done' || s === '완료' || s === 'closed' || s === 'resolved';\n  })\n  .reduce((acc, i) => acc + (Number(i.storyPoints) || 0), 0);\n\nconst spBurnedRate = spTotal > 0 ? Math.round((doneSP / spTotal) * 100) : 0;\nconst ticketDoneRate = issues.length > 0 ? Math.round((statusMap.done / issues.length) * 100) : 0;\n\nreturn [{ json: {\n  boardId: data.boardId,\n  baseUrl: data.baseUrl,\n  commitMessages: data.commitMessages,\n  sprintId: data.sprintId,\n  sprintName: data.sprintName,\n  sprintStartDate: data.sprintStartDate,\n  sprintEndDate: data.sprintEndDate,\n  total_tickets: issues.length,\n  done: statusMap.done,\n  in_review: statusMap.in_review,\n  in_progress: statusMap.in_progress,\n  todo: statusMap.todo,\n  other: statusMap.other,\n  sp_total: spTotal,\n  sp_burned: doneSP,\n  sp_burned_rate: spBurnedRate,\n  ticket_done_rate: ticketDoneRate,\n  done_tickets: Array.from(doneTitles).slice(0, 20),\n  incomplete_tickets: Array.from(inProgressTitles).slice(0, 20),\n  allIssues: issues\n} }];"
+      },
+      "id": "jra-0010",
+      "name": "Aggregate Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst commitMessages = data.commitMessages || [];\nconst issues = data.allIssues || [];\n\n// Commit 메시지에서 Jira 이슈 키 추출 ([WBS-123] 또는 WBS-123 패턴)\nconst jiraKeyPattern = /\\b([A-Z][A-Z0-9]+-\\d+)\\b/g;\n\nconst commitJiraMap = {};\nfor (const msg of commitMessages) {\n  const matches = [...msg.matchAll(jiraKeyPattern)].map(m => m[1]);\n  for (const key of matches) {\n    if (!commitJiraMap[key]) commitJiraMap[key] = [];\n    commitJiraMap[key].push(msg.substring(0, 80));\n  }\n}\n\n// 연결된 티켓 vs 미연결 티켓 분류\nconst issueKeys = new Set(issues.map(i => i.key));\nconst linkedKeys = Object.keys(commitJiraMap).filter(k => issueKeys.has(k));\nconst orphanCommitKeys = Object.keys(commitJiraMap).filter(k => !issueKeys.has(k));\nconst noCommitIssues = issues\n  .filter(i => !commitJiraMap[i.key] && (i.statusCategory?.toLowerCase() !== 'done') && (i.status?.toLowerCase() !== 'done'))\n  .map(i => i.key)\n  .slice(0, 20);\n\nreturn [{ json: {\n  sprintId: data.sprintId,\n  sprintName: data.sprintName,\n  sprintStartDate: data.sprintStartDate,\n  sprintEndDate: data.sprintEndDate,\n  total_tickets: data.total_tickets,\n  done: data.done,\n  in_review: data.in_review,\n  in_progress: data.in_progress,\n  todo: data.todo,\n  sp_total: data.sp_total,\n  sp_burned: data.sp_burned,\n  sp_burned_rate: data.sp_burned_rate,\n  ticket_done_rate: data.ticket_done_rate,\n  done_tickets: data.done_tickets,\n  incomplete_tickets: data.incomplete_tickets,\n  jira_commit_map: commitJiraMap,\n  linked_ticket_count: linkedKeys.length,\n  orphan_commit_keys: orphanCommitKeys,\n  no_commit_issues: noCommitIssues\n} }];"
+      },
+      "id": "jra-0011",
+      "name": "Map Commits to Jira",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\n\nreturn [{ json: {\n  agent_id: 'WBS-JRA',\n  repo: 'jira',\n  repo_type: 'jira',\n  sprint_id: data.sprintId,\n  sprint_name: data.sprintName,\n  sprint_start_date: data.sprintStartDate,\n  sprint_end_date: data.sprintEndDate,\n  total_tickets: data.total_tickets,\n  done: data.done,\n  in_review: data.in_review,\n  in_progress: data.in_progress,\n  todo: data.todo,\n  sp_total: data.sp_total,\n  sp_burned: data.sp_burned,\n  sp_burned_rate: data.sp_burned_rate,\n  ticket_done_rate: data.ticket_done_rate,\n  done_tickets: data.done_tickets,\n  incomplete_tickets: data.incomplete_tickets,\n  jira_commit_map: data.jira_commit_map,\n  linked_ticket_count: data.linked_ticket_count,\n  orphan_commit_keys: data.orphan_commit_keys,\n  no_commit_issues: data.no_commit_issues,\n  call_flow: [],\n  design_gaps: [],\n  commit_count: 0,\n  active_days: 0,\n  error: null\n} }];"
+      },
+      "id": "jra-0012",
+      "name": "Build Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "jra-0013",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2880,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Init Params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Params": {
+      "main": [
+        [
+          {
+            "node": "GET Active Sprint",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Active Sprint": {
+      "main": [
+        [
+          {
+            "node": "Extract Sprint ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Sprint ID": {
+      "main": [
+        [
+          {
+            "node": "Init Pagination",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Pagination": {
+      "main": [
+        [
+          {
+            "node": "Pagination Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pagination Loop": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GET Sprint Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Sprint Issues": {
+      "main": [
+        [
+          {
+            "node": "Accumulate Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accumulate Issues": {
+      "main": [
+        [
+          {
+            "node": "Has More Pages?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has More Pages?": {
+      "main": [
+        [
+          {
+            "node": "Pagination Loop",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aggregate Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Status": {
+      "main": [
+        [
+          {
+            "node": "Map Commits to Jira",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Commits to Jira": {
+      "main": [
+        [
+          {
+            "node": "Build Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Output": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": ""
+  }
+}

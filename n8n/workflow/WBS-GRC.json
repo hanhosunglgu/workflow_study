@@ -1,0 +1,677 @@
+{
+  "name": "WBS-GRC",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wbs-grc",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "grc-0001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "wbs-grc"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst owner = body.owner || $env.GITHUB_OWNER || '';\nlet repos = [];\ntry {\n  const raw = body.repos || $env.GITHUB_REPOS || '[]';\n  repos = typeof raw === 'string' ? JSON.parse(raw) : raw;\n} catch (e) { repos = []; }\nif (!owner) throw new Error('GITHUB_OWNER가 설정되지 않았습니다.');\n\n// 이번 주 월요일 00:00 ~ 현재 (UTC)\nconst now = new Date();\nconst dayOfWeek = now.getUTCDay(); // 0=Sun, 1=Mon ... 6=Sat\nconst daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;\nconst monday = new Date(now);\nmonday.setUTCDate(now.getUTCDate() - daysFromMonday);\nmonday.setUTCHours(0, 0, 0, 0);\n\nconst since = monday.toISOString();\nconst until = now.toISOString();\n\nreturn [{ json: { owner, repos, since, until } }];"
+      },
+      "id": "grc-0002",
+      "name": "Init Params",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/users/{{ $json.owner }}/repos?per_page=100&type=all",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eLRk8UEJ3iN7jUrm",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "grc-0003",
+      "name": "GET User Repos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// GitHub API 응답 평탄화 + GITHUB_REPOS 필터링 + 1 repo per item 변환\nconst initItem = $('Init Params').first().json;\nconst filterList = initItem.repos || [];\n\nconst allItems = $input.all();\nlet repoList = [];\nfor (const item of allItems) {\n  if (Array.isArray(item.json)) {\n    repoList = repoList.concat(item.json);\n  } else if (item.json && item.json.name) {\n    repoList.push(item.json);\n  }\n}\n\nconst filtered = filterList.length > 0\n  ? repoList.filter(r => filterList.includes(r.name))\n  : repoList;\n\nif (filtered.length === 0) {\n  throw new Error(`분석 대상 Repo 없음. filter=${JSON.stringify(filterList)}, 전체=${repoList.length}개`);\n}\n\nreturn filtered.map(r => ({\n  json: {\n    owner: initItem.owner,\n    repo: r.name,\n    full_name: r.full_name,\n    since: initItem.since,\n    until: initItem.until\n  }\n}));"
+      },
+      "id": "grc-0004",
+      "name": "Filter & Split Repos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "grc-0005",
+      "name": "Loop Over Repos",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2000,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.full_name }}/contents/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eLRk8UEJ3iN7jUrm",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "grc-0006",
+      "name": "GET Root Contents",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2220,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// GET Root Contents 응답에서 파일 목록 추출\nconst fileData = $input.all();\n\nlet fileNames = [];\nlet full_name = '';\nlet repo = '';\n\nfor (const item of fileData) {\n  if (Array.isArray(item.json)) {\n    for (const f of item.json) {\n      if (f.name) fileNames.push(f.name);\n      if (!full_name && f.url) {\n        const m = f.url.match(/repos\\/([^/]+\\/[^/]+)\\/contents/);\n        if (m) { full_name = m[1]; repo = full_name.split('/')[1]; }\n      }\n    }\n  } else if (item.json && item.json.name) {\n    fileNames.push(item.json.name);\n    if (!full_name && item.json.url) {\n      const m = item.json.url.match(/repos\\/([^/]+\\/[^/]+)\\/contents/);\n      if (m) { full_name = m[1]; repo = full_name.split('/')[1]; }\n    }\n  }\n}\n\n// fallback\nif (!full_name) {\n  const fallback = $('Loop Over Repos').first().json;\n  full_name = fallback.full_name || '';\n  repo = fallback.repo || '';\n}\n\nconst loopData = $('Loop Over Repos').first().json;\nreturn [{\n  json: {\n    owner: loopData.owner || full_name.split('/')[0],\n    repo,\n    full_name,\n    since: loopData.since,\n    until: loopData.until,\n    file_names: fileNames\n  }\n}];"
+      },
+      "id": "grc-0007",
+      "name": "Attach Repo Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2440,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.full_name }}/commits?since={{ $json.since }}&until={{ $json.until }}&per_page=100",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eLRk8UEJ3iN7jUrm",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "grc-0011",
+      "name": "GET Commits This Week",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2660,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.full_name }}/pulls?state=closed&sort=updated&direction=desc&per_page=50",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "X-GitHub-Api-Version",
+              "value": "2022-11-28"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eLRk8UEJ3iN7jUrm",
+          "name": "GitHub PAT"
+        }
+      },
+      "id": "grc-0012",
+      "name": "GET Merged PRs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2660,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Commit 집계: commit_count, active_days, commit_messages\nconst allItems = $input.all();\nlet commits = [];\nfor (const item of allItems) {\n  if (Array.isArray(item.json)) commits = commits.concat(item.json);\n  else if (item.json && item.json.sha) commits.push(item.json);\n}\n\nconst commitMessages = commits.map(c => c.commit?.message?.split('\\n')[0] || '').filter(Boolean).slice(0, 30);\nconst activeDaySet = new Set(\n  commits.map(c => (c.commit?.author?.date || c.commit?.committer?.date || '').substring(0, 10)).filter(Boolean)\n);\n\n// 평일만 카운트 (0=Sun, 6=Sat 제외)\nconst weekdaySet = new Set(\n  [...activeDaySet].filter(d => {\n    const day = new Date(d).getUTCDay();\n    return day >= 1 && day <= 5;\n  })\n);\n\nconst repoInfo = $('Attach Repo Info').first().json;\n\nreturn [{ json: {\n  _repoCtx: {\n    owner: repoInfo.owner,\n    repo: repoInfo.repo,\n    full_name: repoInfo.full_name,\n    since: repoInfo.since,\n    until: repoInfo.until,\n    file_names: repoInfo.file_names\n  },\n  commit_count: commits.length,\n  active_days: weekdaySet.size,\n  commit_messages: commitMessages\n} }];"
+      },
+      "id": "grc-0013",
+      "name": "Aggregate Commits",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// PR 집계: 이번 주 merged_at 기준 필터\nconst allItems = $input.all();\nlet prs = [];\nfor (const item of allItems) {\n  if (Array.isArray(item.json)) prs = prs.concat(item.json);\n  else if (item.json && item.json.number) prs.push(item.json);\n}\n\nconst commitData = $('Aggregate Commits').first().json;\nconst since = commitData._repoCtx?.since || '';\nconst sinceDate = since ? new Date(since) : new Date(0);\n\nconst mergedThisWeek = prs.filter(pr =>\n  pr.merged_at && new Date(pr.merged_at) >= sinceDate\n);\n\nreturn [{ json: {\n  _repoCtx: commitData._repoCtx,\n  commit_count: commitData.commit_count,\n  active_days: commitData.active_days,\n  commit_messages: commitData.commit_messages,\n  merged_pr_count: mergedThisWeek.length,\n  merged_prs: mergedThisWeek.map(pr => ({\n    number: pr.number,\n    title: pr.title,\n    merged_at: pr.merged_at,\n    user: pr.user?.login || null\n  })).slice(0, 20)\n} }];"
+      },
+      "id": "grc-0014",
+      "name": "Aggregate PRs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "numberInputs": 2
+      },
+      "id": "grc-0015",
+      "name": "Merge Commit & PR",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        3100,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Commit 집계 + PR 집계 합산 → Loop로 복귀\nconst items = $input.all();\nlet commitData = null;\nlet prData = null;\n\nfor (const item of items) {\n  if (item.json.merged_pr_count !== undefined) prData = item.json;\n  else if (item.json.commit_count !== undefined && item.json.merged_pr_count === undefined) commitData = item.json;\n}\n// Merge 노드는 두 입력을 순서대로 출력 — 첫 번째가 Aggregate Commits\nif (!commitData && items[0]) commitData = items[0].json;\nif (!prData && items[1]) prData = items[1].json;\n\nconst ctx = (commitData || prData)?._repoCtx || {};\n\nreturn [{ json: {\n  owner: ctx.owner,\n  repo: ctx.repo,\n  full_name: ctx.full_name,\n  since: ctx.since,\n  until: ctx.until,\n  file_names: ctx.file_names || [],\n  commit_count: commitData?.commit_count ?? 0,\n  active_days: commitData?.active_days ?? 0,\n  commit_messages: commitData?.commit_messages ?? [],\n  merged_pr_count: prData?.merged_pr_count ?? 0,\n  merged_prs: prData?.merged_prs ?? []\n} }];"
+      },
+      "id": "grc-0016",
+      "name": "Build Repo Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3320,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 루트 파일 패턴으로 Repo 유형 분류 (5단계 우선순위)\nconst items = $input.all();\nconst classified = [];\nconst commitStatsByRepo = {};\n\nfor (const item of items) {\n  const { repo, file_names, commit_count, active_days, commit_messages, merged_pr_count, merged_prs } = item.json;\n  const fileSet = new Set(file_names || []);\n  const fileArr = file_names || [];\n\n  let type = 'unknown';\n  let reason = '';\n\n  if (fileSet.has('Podfile') || fileSet.has('pubspec.yaml') || fileSet.has('Package.swift')) {\n    type = 'mobile';\n    reason = fileSet.has('Podfile') ? 'Podfile' : fileSet.has('pubspec.yaml') ? 'pubspec.yaml' : 'Package.swift';\n  } else if (fileSet.has('build.gradle') && !fileSet.has('package.json')) {\n    type = 'mobile'; reason = 'build.gradle';\n  } else if (fileArr.some(f => f.endsWith('.tf')) || fileSet.has('helmfile.yaml') || fileSet.has('terraform') || fileSet.has('k8s') || fileSet.has('infra')) {\n    type = 'config';\n    reason = fileArr.find(f => f.endsWith('.tf')) || 'helmfile/k8s/terraform';\n  } else if (fileSet.has('pom.xml') || fileSet.has('requirements.txt') || fileSet.has('go.mod') || fileSet.has('Cargo.toml') || fileSet.has('build.sbt') || (fileSet.has('package.json') && (fileSet.has('nest-cli.json') || fileSet.has('server.js') || fileSet.has('app.js') || fileSet.has('index.js')))) {\n    type = 'backend';\n    reason = fileSet.has('pom.xml') ? 'pom.xml' : fileSet.has('requirements.txt') ? 'requirements.txt' : fileSet.has('go.mod') ? 'go.mod' : fileSet.has('Cargo.toml') ? 'Cargo.toml' : 'package.json+server entry';\n  } else if (fileSet.has('package.json') && (fileSet.has('next.config.js') || fileSet.has('next.config.ts') || fileSet.has('vite.config.ts') || fileSet.has('vite.config.js') || fileSet.has('angular.json') || fileSet.has('vue.config.js') || fileSet.has('nuxt.config.ts') || fileSet.has('svelte.config.js'))) {\n    type = 'frontend';\n    reason = fileSet.has('next.config.js') || fileSet.has('next.config.ts') ? 'Next.js' : fileSet.has('vite.config.ts') || fileSet.has('vite.config.js') ? 'Vite' : fileSet.has('angular.json') ? 'Angular' : 'Vue/Nuxt/Svelte';\n  } else if (fileSet.has('package.json')) {\n    type = 'frontend'; reason = 'package.json (fallback)';\n  }\n\n  classified.push({ repo, type, reason });\n  commitStatsByRepo[repo] = {\n    commit_count: commit_count || 0,\n    active_days: active_days || 0,\n    commit_messages: commit_messages || [],\n    merged_pr_count: merged_pr_count || 0,\n    merged_prs: merged_prs || []\n  };\n}\n\nconst result = { backend: [], frontend: [], config: [], mobile: [], unknown: [] };\nfor (const item of classified) result[item.type].push(item.repo);\n\n// 전체 commit 집계 (WBS-ORK에서 진척률 계산용)\nconst allCommitMessages = Object.values(commitStatsByRepo)\n  .flatMap(s => s.commit_messages);\nconst totalCommits = Object.values(commitStatsByRepo)\n  .reduce((acc, s) => acc + s.commit_count, 0);\nconst maxActiveDays = Object.values(commitStatsByRepo)\n  .reduce((acc, s) => Math.max(acc, s.active_days), 0);\n\nreturn [{ json: {\n  ...result,\n  _classified_detail: classified,\n  commit_stats: commitStatsByRepo,\n  total_commit_count: totalCommits,\n  max_active_days: maxActiveDays,\n  all_commit_messages: allCommitMessages.slice(0, 50)\n} }];"
+      },
+      "id": "grc-0008",
+      "name": "Classify Repos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3540,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nreturn [{ json: {\n  agent_id: 'WBS-GRC',\n  backend: data.backend || [],\n  frontend: data.frontend || [],\n  config: data.config || [],\n  mobile: data.mobile || [],\n  unknown: data.unknown || [],\n  _classified_detail: data._classified_detail || [],\n  commit_stats: data.commit_stats || {},\n  total_commit_count: data.total_commit_count || 0,\n  max_active_days: data.max_active_days || 0,\n  all_commit_messages: data.all_commit_messages || [],\n  error: null\n} }];"
+      },
+      "id": "grc-0009",
+      "name": "Build Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "grc-0010",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = $input.item.json;\nconst headers = resp.headers || {};\nconst remaining = parseInt(headers['x-ratelimit-remaining'] ?? headers['X-RateLimit-Remaining'] ?? '5000', 10);\nconst limit = parseInt(headers['x-ratelimit-limit'] ?? headers['X-RateLimit-Limit'] ?? '5000', 10);\nconst usedPct = limit > 0 ? Math.round((1 - remaining / limit) * 100) : 0;\nconst repos = Array.isArray(resp.body) ? resp.body : (resp.body || []);\nreturn [{ json: { repos, rate_limit: { remaining, limit, used_pct: usedPct }, rate_limit_warning: usedPct >= 80 } }];"
+      },
+      "id": "c3d40001-0001-4000-8000-000000000001",
+      "name": "Check Rate Limit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.rate_limit_warning }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "c3d40001-0003-4000-8000-000000000003",
+      "name": "IF Rate Limit Warning",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"attachments\":[{\"contentType\":\"application/vnd.microsoft.card.adaptive\",\"content\":{\"$schema\":\"http://adaptivecards.io/schemas/adaptive-card.json\",\"type\":\"AdaptiveCard\",\"version\":\"1.0\",\"body\":[{\"type\":\"TextBlock\",\"text\":\"⚠️ GitHub API Rate Limit 경고\",\"weight\":\"Bolder\",\"color\":\"Warning\"},{\"type\":\"FactSet\",\"facts\":[{\"title\":\"사용률\",\"value\":\"={{ $('Check Rate Limit').item.json.rate_limit.used_pct }}%\"},{\"title\":\"남은 요청\",\"value\":\"={{ $('Check Rate Limit').item.json.rate_limit.remaining }} / {{ $('Check Rate Limit').item.json.rate_limit.limit }}\"},{\"title\":\"조치\",\"value\":\"WBS Agent 실행 빈도를 줄이거나 잠시 후 재시도하세요.\"}]}]}}]}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 2,
+            "waitBetweenTries": 10000
+          }
+        }
+      },
+      "id": "c3d40001-0002-4000-8000-000000000002",
+      "name": "Warn Rate Limit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "numberInputs": 2
+      },
+      "id": "c3d40001-0004-4000-8000-000000000004",
+      "name": "Merge After Rate Check",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1560,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Init Params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Params": {
+      "main": [
+        [
+          {
+            "node": "GET User Repos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter & Split Repos": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Repos": {
+      "main": [
+        [
+          {
+            "node": "Classify Repos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GET Root Contents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Root Contents": {
+      "main": [
+        [
+          {
+            "node": "Attach Repo Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Repo Info": {
+      "main": [
+        [
+          {
+            "node": "GET Commits This Week",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GET Merged PRs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Commits This Week": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Commits",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Merged PRs": {
+      "main": [
+        [
+          {
+            "node": "Aggregate PRs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Commits": {
+      "main": [
+        [
+          {
+            "node": "Merge Commit & PR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate PRs": {
+      "main": [
+        [
+          {
+            "node": "Merge Commit & PR",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Commit & PR": {
+      "main": [
+        [
+          {
+            "node": "Build Repo Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Repo Stats": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Repos": {
+      "main": [
+        [
+          {
+            "node": "Build Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Output": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET User Repos": {
+      "main": [
+        [
+          {
+            "node": "Check Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Rate Limit": {
+      "main": [
+        [
+          {
+            "node": "IF Rate Limit Warning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Rate Limit Warning": {
+      "main": [
+        [
+          {
+            "node": "Warn Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge After Rate Check",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Warn Rate Limit": {
+      "main": [
+        [
+          {
+            "node": "Merge After Rate Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge After Rate Check": {
+      "main": [
+        [
+          {
+            "node": "Filter & Split Repos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": ""
+  }
+}

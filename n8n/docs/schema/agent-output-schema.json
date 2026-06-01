@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WBS Specialist Agent Standard Output Schema",
+  "description": "모든 Specialist Agent(WBS-BAK, WBS-FRT, WBS-CFG, WBS-MOB)가 Orchestrator(WBS-ORK)에 반환하는 표준 출력 스키마",
+  "type": "object",
+  "required": ["agent_id", "repo", "repo_type", "call_flow", "design_gaps", "commit_count", "active_days"],
+  "properties": {
+    "agent_id": {
+      "type": "string",
+      "enum": ["WBS-BAK", "WBS-FRT", "WBS-CFG", "WBS-MOB", "WBS-DDA", "WBS-JRA", "WBS-GRC"],
+      "description": "Agent 식별자"
+    },
+    "repo": {
+      "type": "string",
+      "description": "분석 대상 Repository 이름"
+    },
+    "repo_type": {
+      "type": "string",
+      "enum": ["backend", "frontend", "config", "mobile", "design_doc", "jira", "classifier"],
+      "description": "Repo 유형"
+    },
+    "call_flow": {
+      "type": "array",
+      "description": "실제 코드에서 추출한 호출 흐름 시퀀스",
+      "items": {
+        "type": "object",
+        "required": ["from", "to"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "호출 출발지 (예: Frontend, Mobile, BackendService)"
+          },
+          "to": {
+            "type": "string",
+            "description": "호출 대상 (예: POST /api/auth/login)"
+          },
+          "handler": {
+            "type": "string",
+            "description": "처리 함수/메서드 (예: AuthController.login())"
+          },
+          "calls": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "내부 호출 체인 (예: [AuthService.validate(), UserRepository.findByEmail()])"
+          }
+        }
+      }
+    },
+    "design_gaps": {
+      "type": "array",
+      "description": "설계 문서와 실제 구현 간 불일치 목록",
+      "items": {
+        "type": "object",
+        "required": ["item", "discrepancy_type", "severity"],
+        "properties": {
+          "item": {
+            "type": "string",
+            "description": "불일치 항목 식별자 (예: POST /api/user/register)"
+          },
+          "discrepancy_type": {
+            "type": "string",
+            "enum": ["not_implemented", "extra_implementation", "spec_changed"],
+            "description": "불일치 유형: not_implemented(미구현), extra_implementation(설계 외 추가), spec_changed(스펙 변경)"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["high", "medium", "low"],
+            "description": "심각도: high(동작 변경), medium(스펙 불일치), low(설계 외 추가)"
+          },
+          "design": {
+            "type": "string",
+            "description": "설계 문서 기준 내용"
+          },
+          "actual": {
+            "type": "string",
+            "description": "실제 구현 내용"
+          },
+          "intent_analysis": {
+            "type": "string",
+            "description": "Ollama LLM이 분석한 불일치 의도 (WBS-ORK에서 채움)"
+          }
+        }
+      }
+    },
+    "commit_count": {
+      "type": "integer",
+      "description": "이번 주 해당 Repo의 총 Commit 수"
+    },
+    "active_days": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5,
+      "description": "이번 주(월~금) 중 Commit이 있었던 활성 개발일 수"
+    },
+    "error": {
+      "type": ["string", "null"],
+      "description": "Agent 실행 중 오류 발생 시 오류 메시지 (정상 시 null)"
+    }
+  },
+  "examples": [
+    {
+      "agent_id": "WBS-BAK",
+      "repo": "api-server",
+      "repo_type": "backend",
+      "call_flow": [
+        {
+          "from": "Frontend",
+          "to": "POST /api/auth/login",
+          "handler": "AuthController.login()",
+          "calls": ["AuthService.validate()", "UserRepository.findByEmail()"]
+        }
+      ],
+      "design_gaps": [
+        {
+          "item": "POST /api/user/register",
+          "discrepancy_type": "spec_changed",
+          "severity": "high",
+          "design": "필드: username, password, email",
+          "actual": "필드: user_name, password, email_address",
+          "intent_analysis": null
+        }
+      ],
+      "commit_count": 15,
+      "active_days": 4,
+      "error": null
+    }
+  ]
+}

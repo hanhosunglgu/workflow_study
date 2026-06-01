@@ -1,0 +1,924 @@
+{
+  "name": "WBS-ORK",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "ork-0001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wbs-ork",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "ork-0002",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "wbs-ork"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 17 * * 5"
+            }
+          ]
+        }
+      },
+      "id": "ork-0003",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\n\n// 주간 날짜 범위 계산 (이번 주 월~금, UTC)\nconst now = new Date();\nconst dayOfWeek = now.getUTCDay();\nconst daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;\nconst monday = new Date(now);\nmonday.setUTCDate(now.getUTCDate() - daysFromMonday);\nmonday.setUTCHours(0, 0, 0, 0);\n\nconst owner = $env.GITHUB_OWNER || 'hanhosunglgu';\nlet repos = [];\ntry {\n  const raw = $env.GITHUB_REPOS || '[\"WBS_Check\"]';\n  repos = typeof raw === 'string' ? JSON.parse(raw) : raw;\n} catch(e) { repos = ['WBS_Check']; }\n\nconst boardId    = body.board_id    || $env.JIRA_BOARD_ID    || '8207';\nconst baseUrl    = $env.JIRA_BASE_URL    || 'https://lgucorp.atlassian.net';\nconst ddaRepo    = $env.DESIGN_DOC_REPO  || 'hanhosunglgu/WBS_Check';\nconst ddaPath    = $env.DESIGN_DOC_PATH  || 'docs/design';\n\nreturn [{ json: {\n  owner,\n  repos,\n  boardId,\n  baseUrl,\n  ddaRepo,\n  ddaPath,\n  week_start: monday.toISOString(),\n  week_end:   now.toISOString(),\n  triggered_by: body.triggered_by || 'manual'\n} }];"
+      },
+      "id": "ork-0004",
+      "name": "Init Params",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:5678/webhook/wbs-grc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ owner: $json.owner, repos: $json.repos }) }}",
+        "options": {
+          "timeout": 300000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "id": "ork-0005",
+      "name": "Call WBS-GRC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const grc = $input.first().json;\nconst params = $('Init Params').first().json;\n\n// GRC 결과 파싱 — 실패 시 기본값\nconst backend  = grc.backend  || [];\nconst frontend = grc.frontend || [];\nconst config   = grc.config   || [];\nconst mobile   = grc.mobile   || [];\n\nconst allCommitMessages = grc.all_commit_messages || [];\nconst totalCommits  = grc.total_commit_count || 0;\nconst maxActiveDays = grc.max_active_days    || 0;\nconst commitStats   = grc.commit_stats       || {};\n\nreturn [{ json: {\n  owner:            params.owner,\n  repos:            params.repos,\n  boardId:          params.boardId,\n  baseUrl:          params.baseUrl,\n  ddaRepo:          params.ddaRepo,\n  ddaPath:          params.ddaPath,\n  week_start:       params.week_start,\n  week_end:         params.week_end,\n  // GRC 분류 결과\n  backend_repos:    backend,\n  frontend_repos:   frontend,\n  config_repos:     config,\n  mobile_repos:     mobile,\n  has_backend:      backend.length  > 0,\n  has_frontend:     frontend.length > 0,\n  has_config:       config.length   > 0,\n  has_mobile:       mobile.length   > 0,\n  // Commit 집계\n  all_commit_messages: allCommitMessages,\n  total_commits:    totalCommits,\n  max_active_days:  maxActiveDays,\n  commit_stats:     commitStats,\n  grc_error:        grc.error || null\n} }];"
+      },
+      "id": "ork-0006",
+      "name": "Parse GRC Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:5678/webhook/wbs-jra",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ board_id: $json.boardId, commit_messages: $json.all_commit_messages }) }}",
+        "options": {
+          "timeout": 300000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "id": "ork-0007",
+      "name": "Call WBS-JRA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:5678/webhook/wbs-dda",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ owner: $json.owner, repo: $json.ddaRepo, path: $json.ddaPath }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "id": "ork-0008",
+      "name": "Call WBS-DDA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:5678/webhook/wbs-bak",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ owner: $json.owner, repos: $json.backend_repos.length > 0 ? $json.backend_repos : $json.repos }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "id": "ork-0009",
+      "name": "Call WBS-BAK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:5678/webhook/wbs-frt",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ owner: $json.owner, repos: $json.frontend_repos.length > 0 ? $json.frontend_repos : $json.repos }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "id": "ork-0010",
+      "name": "Call WBS-FRT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        820
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:5678/webhook/wbs-cfg",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ owner: $json.owner, repos: $json.config_repos.length > 0 ? $json.config_repos : $json.repos }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "id": "ork-0011",
+      "name": "Call WBS-CFG",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:5678/webhook/wbs-mob",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ owner: $json.owner, repos: $json.mobile_repos.length > 0 ? $json.mobile_repos : $json.repos }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "id": "ork-0012",
+      "name": "Call WBS-MOB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        1220
+      ]
+    },
+    {
+      "parameters": {
+        "numberInputs": 6
+      },
+      "id": "ork-0013",
+      "name": "Merge All Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1400,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 6개 Agent 결과 수집 — 부분 실패 시 기본값으로 대체\nconst items = $input.all();\nconst grcState = $('Parse GRC Result').first().json;\n\n// agent_id 기준으로 결과 맵 구성\nconst resultMap = {};\nfor (const item of items) {\n  const d = item.json;\n  const id = d.agent_id || 'unknown';\n  resultMap[id] = d;\n}\n\n// 기본값 팩토리\nconst defaultAgent = (id, repo_type) => ({\n  agent_id: id,\n  repo: 'N/A',\n  repo_type,\n  call_flow: [],\n  design_gaps: [],\n  commit_count: 0,\n  active_days: 0,\n  error: 'agent_skipped'\n});\n\n// Agent 실패 판단:\n// 1. agent_id 없음 → webhook 비활성/빈 응답 (neverError:true 환경)\n// 2. error 필드 존재 → 내부 에러 명시\n// 3. 필수 식별 필드 부재 → 응답 구조 불완전\nconst isRawFailed = (raw) => {\n  if (!raw) return true;\n  // agent_id가 없으면 비활성 webhook의 빈 응답\n  if (!raw.agent_id) return true;\n  // error 필드가 있으면 실패\n  if (raw.error && raw.error !== null && raw.error !== 'null') return true;\n  return false;\n};\n\n// 각 agent별 필수 식별 필드 검사\nconst isJraFailed  = (raw) => isRawFailed(raw) || (raw && !raw.agent_id && Object.keys(raw).length === 0);\nconst isCodeFailed = (raw) => isRawFailed(raw);\n\nconst rawJra = resultMap['WBS-JRA'];\nconst rawDda = resultMap['WBS-DDA'];\nconst rawBak = resultMap['WBS-BAK'];\nconst rawFrt = resultMap['WBS-FRT'];\nconst rawCfg = resultMap['WBS-CFG'];\nconst rawMob = resultMap['WBS-MOB'];\n\nconst jra = rawJra && !isRawFailed(rawJra)\n  ? rawJra\n  : { agent_id:'WBS-JRA', total_tickets:0, done:0, in_review:0, in_progress:0, todo:0, sp_total:0, sp_burned:0, sp_burned_rate:0, ticket_done_rate:0, jira_commit_map:{}, error: rawJra?.error || 'agent_unavailable' };\n\nconst dda = rawDda && !isRawFailed(rawDda)\n  ? rawDda\n  : { agent_id:'WBS-DDA', endpoints:[], tables:[], sequences:[], error: rawDda?.error || 'agent_unavailable' };\n\nconst bak = rawBak && !isRawFailed(rawBak)\n  ? rawBak\n  : { ...defaultAgent('WBS-BAK','backend'), error: rawBak?.error || 'agent_unavailable' };\n\nconst frt = rawFrt && !isRawFailed(rawFrt)\n  ? rawFrt\n  : { ...defaultAgent('WBS-FRT','frontend'), error: rawFrt?.error || 'agent_unavailable' };\n\nconst cfg = rawCfg && !isRawFailed(rawCfg)\n  ? rawCfg\n  : { ...defaultAgent('WBS-CFG','config'), error: rawCfg?.error || 'agent_unavailable' };\n\nconst mob = rawMob && !isRawFailed(rawMob)\n  ? rawMob\n  : { ...defaultAgent('WBS-MOB','mobile'), error: rawMob?.error || 'agent_unavailable' };\n\n// 실패한 Agent 목록 — error 필드 기반 (agent_unavailable 포함)\nconst failedAgents = [jra,dda,bak,frt,cfg,mob]\n  .filter(a => a.error && a.error !== null && a.error !== 'null')\n  .map(a => a.agent_id);\n\nreturn [{ json: {\n  // 파라미터 전달\n  owner:              grcState.owner,\n  repos:              grcState.repos,\n  boardId:            grcState.boardId,\n  week_start:         grcState.week_start,\n  week_end:           grcState.week_end,\n  total_commits:      grcState.total_commits,\n  max_active_days:    grcState.max_active_days,\n  all_commit_messages: grcState.all_commit_messages,\n  // Agent 결과\n  jra, dda, bak, frt, cfg, mob,\n  failed_agents: failedAgents\n} }];"
+      },
+      "id": "ork-0014",
+      "name": "Integrate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Task 3.3.1: Call Flow 재구성 — Mobile/Frontend → Backend → Config/DB 레이어 정렬\nconst d = $input.first().json;\nconst { bak, frt, mob, dda } = d;\n\n// 설계 문서의 시퀀스 (DDA)\nconst designSequences = dda.sequences || [];\nconst designEndpoints = dda.endpoints || [];\n\n// 각 Agent의 call_flow 수집\nconst rawFlows = [\n  ...(mob.call_flow || []).map(f => ({ ...f, layer: 'mobile' })),\n  ...(frt.call_flow || []).map(f => ({ ...f, layer: 'frontend' })),\n  ...(bak.call_flow || []).map(f => ({ ...f, layer: 'backend' }))\n];\n\n// 실제 API 엔드포인트 (BAK)\nconst actualEndpoints = bak.extracted_endpoints || bak.call_flow?.map(f => f.to) || [];\n\n// 이번 주 전체 커밋이 0개이면 endpoint 비교 생략 (코드 분석 결과 없음은 미구현이 아님)\nconst totalCommits = (bak.commit_count || 0) + (frt.commit_count || 0) +\n                     ((d.cfg || {}).commit_count || 0) + (mob.commit_count || 0);\nconst noCommitsThisWeek = totalCommits === 0;\n\n// 설계 문서 endpoints가 n8n webhook paths인지 확인 (예: /webhook/wbs-xxx)\n// n8n webhook paths는 실제 애플리케이션 코드에 없으므로 비교 대상에서 제외\nconst toStr = e => (typeof e === 'string' ? e : e.path || e.endpoint || JSON.stringify(e)).toLowerCase();\nconst isWebhookPath = e => toStr(e).includes('/webhook/');\nconst comparableDesignEndpoints = designEndpoints.filter(e => !isWebhookPath(e));\nconst skipEndpointComparison = noCommitsThisWeek || comparableDesignEndpoints.length === 0;\n\n// 설계 vs 실제 엔드포인트 비교\nconst designSet  = new Set(comparableDesignEndpoints.map(toStr));\nconst actualSet  = new Set(actualEndpoints.map(e => (typeof e === 'string' ? e : JSON.stringify(e)).toLowerCase()));\n\nconst missingInActual = skipEndpointComparison ? [] : [...designSet].filter(e => !actualSet.has(e));\nconst extraInActual   = skipEndpointComparison ? [] : [...actualSet].filter(e => !designSet.has(e));\n\n// 통합 Call Flow 맵 (레이어별 정렬)\nconst integratedFlow = {\n  design_sequences: designSequences,\n  mobile_flows:     mob.call_flow   || [],\n  frontend_flows:   frt.call_flow   || [],\n  frontend_api_calls: frt.api_calls || [],\n  backend_flows:    bak.call_flow   || [],\n  actual_endpoints: actualEndpoints,\n  design_endpoints: designEndpoints\n};\n\nreturn [{ json: {\n  ...d,\n  integrated_flow:     integratedFlow,\n  missing_in_actual:   missingInActual,\n  extra_in_actual:     extraInActual,\n  endpoint_match_rate: designSet.size > 0\n    ? Math.round((designSet.size - missingInActual.length) / designSet.size * 100)\n    : 100\n} }];"
+      },
+      "id": "ork-0015",
+      "name": "Build Call Flow Map",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Task 3.3.2: 전체 design_gaps[] 통합 — 모든 Agent Gap 합산 + 중복 제거\nconst d = $input.first().json;\nconst { bak, frt, cfg, mob, missing_in_actual, extra_in_actual } = d;\n\nconst allGaps = [];\n\n// 각 Agent의 design_gaps 수집\nfor (const [agentId, agent] of [\n  ['WBS-BAK', bak],\n  ['WBS-FRT', frt],\n  ['WBS-CFG', cfg],\n  ['WBS-MOB', mob]\n]) {\n  const gaps = agent.design_gaps || [];\n  for (const gap of gaps) {\n    allGaps.push({\n      source_agent:      agentId,\n      item:              gap.item || gap.description || 'Unknown',\n      discrepancy_type:  gap.discrepancy_type || gap.type || 'unknown',\n      severity:          (gap.severity || 'medium').toLowerCase(),\n      design:            gap.design || '',\n      actual:            gap.actual || '',\n      description:       gap.description || gap.item || ''\n    });\n  }\n}\n\n// Call Flow 불일치를 Gap으로 추가\nfor (const endpoint of (missing_in_actual || [])) {\n  allGaps.push({\n    source_agent:     'WBS-ORK',\n    item:             endpoint,\n    discrepancy_type: 'missing_implementation',\n    severity:         'high',\n    design:           endpoint,\n    actual:           'not found in code',\n    description:      `설계 문서에 정의된 엔드포인트가 실제 코드에 없음: ${endpoint}`\n  });\n}\nfor (const endpoint of (extra_in_actual || [])) {\n  allGaps.push({\n    source_agent:     'WBS-ORK',\n    item:             endpoint,\n    discrepancy_type: 'undocumented_implementation',\n    severity:         'medium',\n    design:           'not in design doc',\n    actual:           endpoint,\n    description:      `코드에는 있지만 설계 문서에 없는 엔드포인트: ${endpoint}`\n  });\n}\n\n// 중복 제거 (item + source_agent 기준)\nconst seen = new Set();\nconst uniqueGaps = allGaps.filter(g => {\n  const key = `${g.source_agent}::${g.item}`;\n  if (seen.has(key)) return false;\n  seen.add(key);\n  return true;\n});\n\nconst highGaps   = uniqueGaps.filter(g => g.severity === 'high');\nconst mediumGaps = uniqueGaps.filter(g => g.severity === 'medium');\nconst lowGaps    = uniqueGaps.filter(g => g.severity === 'low');\n\nreturn [{ json: {\n  ...d,\n  all_gaps:        uniqueGaps,\n  gap_count:       uniqueGaps.length,\n  high_gap_count:  highGaps.length,\n  medium_gap_count: mediumGaps.length,\n  low_gap_count:   lowGaps.length\n} }];"
+      },
+      "id": "ork-0016",
+      "name": "Merge Design Gaps",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2060,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Task 3.3.3: OpenAI API 호출을 위한 요청 구성\nconst d = $input.first().json;\nconst { all_gaps, dda } = d;\n\n// Gap이 없으면 API 호출 스킵\nif (!all_gaps || all_gaps.length === 0) {\n  return [{ json: { ...d, _skip_ollama: true } }];\n}\n\nconst gapSummary = all_gaps.slice(0, 15).map((g, i) =>\n  `${i+1}. [${g.severity.toUpperCase()}] ${g.source_agent} - ${g.item}: ${g.description}`\n).join('\\n');\n\nconst designItems = (dda.endpoints || []).length + (dda.tables || []).length + (dda.sequences || []).length;\n\nconst prompt = `You are a software design review assistant. Analyze the following design gaps found between design documents and actual implementation.\n\nDesign document items: ${designItems} total (endpoints: ${(dda.endpoints||[]).length}, tables: ${(dda.tables||[]).length}, sequences: ${(dda.sequences||[]).length})\n\nFound gaps:\n${gapSummary}\n\nFor each gap, classify intent as one of: \"intentional_improvement\", \"oversight\", \"missing_implementation\".\nReturn ONLY JSON array (no explanation):\n[{\"item\": \"...\", \"intent\": \"...\", \"severity\": \"high|medium|low\", \"recommendation\": \"...\"}]`;\n\nreturn [{ json: {\n  ...d,\n  _skip_ollama: false,\n  _ollama_prompt: prompt,\n  _design_items_count: designItems,\n  model: 'gpt-4.1-mini',\n  messages: [{ role: 'user', content: prompt }],\n  stream: false\n} }];"
+      },
+      "id": "ork-0017",
+      "name": "Build Gap Analysis Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2280,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "skip-check",
+              "leftValue": "={{ $json._skip_ollama }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ork-0018",
+      "name": "Has Gaps?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2500,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.OPENAI_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $json.model, messages: $json.messages, stream: $json.stream }) }}",
+        "options": {
+          "timeout": 600000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "ork-0019",
+      "name": "OpenAI Gap Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2720,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ollama 결과 파싱 및 Gap에 intent_analysis 필드 추가\nconst ollamaResult = $input.first().json;\nconst prevData = $('Build Gap Analysis Prompt').first().json;\n\nlet analyzedGaps = prevData.all_gaps || [];\n\ntry {\n  const raw = ollamaResult.choices[0].message.content || '';\n  // JSON 배열 추출\n  const match = raw.match(/\\[.*\\]/s);\n  if (match) {\n    const parsed = JSON.parse(match[0]);\n    // item 기준으로 Gap에 intent 보강\n    const intentMap = {};\n    for (const p of parsed) {\n      intentMap[p.item] = { intent: p.intent, recommendation: p.recommendation };\n    }\n    analyzedGaps = analyzedGaps.map(g => ({\n      ...g,\n      intent_analysis:  intentMap[g.item]?.intent     || 'unknown',\n      recommendation:   intentMap[g.item]?.recommendation || ''\n    }));\n  }\n} catch(e) {\n  // 파싱 실패 시 기본값 유지\n  analyzedGaps = analyzedGaps.map(g => ({ ...g, intent_analysis: 'unknown', recommendation: '' }));\n}\n\nreturn [{ json: { ...prevData, all_gaps: analyzedGaps } }];"
+      },
+      "id": "ork-0020",
+      "name": "Parse Gap Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2940,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gap 없는 경우 — 분석 없이 통과\nconst d = $input.first().json;\nreturn [{ json: { ...d, all_gaps: [] } }];"
+      },
+      "id": "ork-0021",
+      "name": "No Gaps Pass",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2720,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Task 3.3.4: 설계 적합성 점수 계산\n// 공식: (전체 설계 항목 - High Gap 수) / 전체 설계 항목 × 100\nconst d = $input.first().json;\nconst { all_gaps, dda, endpoint_match_rate } = d;\n\nconst designItems = (dda.endpoints||[]).length + (dda.tables||[]).length + (dda.sequences||[]).length;\nconst highGaps    = (all_gaps||[]).filter(g => g.severity === 'high').length;\nconst mediumGaps  = (all_gaps||[]).filter(g => g.severity === 'medium').length;\nconst lowGaps     = (all_gaps||[]).filter(g => g.severity === 'low').length;\n\nlet designScore;\nif (designItems === 0) {\n  designScore = highGaps === 0 ? 100 : Math.max(0, 100 - highGaps * 15);\n} else {\n  designScore = Math.max(0, Math.round((designItems - highGaps) / designItems * 100));\n}\n\n// 설계 적합성 등급\nlet designGrade;\nif (designScore >= 90)      designGrade = 'GREEN';\nelse if (designScore >= 70) designGrade = 'YELLOW';\nelse                        designGrade = 'RED';\n\nreturn [{ json: {\n  ...d,\n  design_score:      designScore,\n  design_grade:      designGrade,\n  design_items_total: designItems,\n  high_gap_count:    highGaps,\n  medium_gap_count:  mediumGaps,\n  low_gap_count:     lowGaps,\n  gap_count:         (all_gaps||[]).length\n} }];"
+      },
+      "id": "ork-0022",
+      "name": "Calc Design Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3160,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Task 3.4: 진척률 최종 계산\n// 가중치: Jira 티켓 완료율 40% + SP 소진률 40% + Commit 빈도 20%\nconst d = $input.first().json;\nconst { jra, total_commits, max_active_days } = d;\n\n// Jira 티켓 완료율 (40%)\nconst ticketDoneRate  = jra.ticket_done_rate || 0;  // 0~100\nconst jiraScore       = ticketDoneRate * 0.4;\n\n// SP 소진률 (40%)\n// SP 데이터 없을 경우 티켓 완료율로 대체\nconst spBurnedRate    = jra.sp_burned_rate > 0 ? jra.sp_burned_rate : ticketDoneRate;\nconst spScore         = spBurnedRate * 0.4;\n\n// GitHub Commit 빈도 (20%) — 활성 개발일 / 5일\nconst activeDayRate   = Math.min(100, Math.round((max_active_days / 5) * 100));\nconst commitScore     = activeDayRate * 0.2;\n\n// 전체 진척률\nconst totalProgress   = Math.round(jiraScore + spScore + commitScore);\n\n// 진척률 등급 (Green/Yellow/Red)\nlet progressGrade;\nif (totalProgress >= 70)      progressGrade = 'GREEN';\nelse if (totalProgress >= 40) progressGrade = 'YELLOW';\nelse                          progressGrade = 'RED';\n\n// 이번 주 날짜 범위 (YYYY-MM-DD)\nconst weekStart = d.week_start ? d.week_start.substring(0, 10) : 'N/A';\nconst weekEnd   = d.week_end   ? d.week_end.substring(0, 10)   : 'N/A';\n\nreturn [{ json: {\n  // 기본 메타\n  agent_id:           'WBS-ORK',\n  week_start:         weekStart,\n  week_end:           weekEnd,\n  // 진척률\n  total_progress:     totalProgress,\n  progress_grade:     progressGrade,\n  jira_score:         Math.round(jiraScore),\n  sp_score:           Math.round(spScore),\n  commit_score:       Math.round(commitScore),\n  // Jira 현황\n  sprint_id:          jra.sprint_id   || null,\n  sprint_name:        jra.sprint_name || 'N/A',\n  total_tickets:      jra.total_tickets   || 0,\n  done_tickets:       jra.done            || 0,\n  in_progress_tickets: jra.in_progress    || 0,\n  in_review_tickets:  jra.in_review       || 0,\n  todo_tickets:       jra.todo            || 0,\n  sp_total:           jra.sp_total        || 0,\n  sp_burned:          jra.sp_burned       || 0,\n  sp_burned_rate:     jra.sp_burned_rate  || 0,\n  ticket_done_rate:   ticketDoneRate,\n  jira_commit_map:    jra.jira_commit_map || {},\n  linked_ticket_count: jra.linked_ticket_count || 0,\n  no_commit_issues:   jra.no_commit_issues || [],\n  incomplete_tickets: (jra.incomplete_tickets || []).slice(0, 10),\n  // GitHub 활동\n  total_commits:      total_commits    || 0,\n  max_active_days:    max_active_days  || 0,\n  active_day_rate:    activeDayRate,\n  // 설계 적합성\n  design_score:       d.design_score,\n  design_grade:       d.design_grade,\n  design_items_total: d.design_items_total,\n  high_gap_count:     d.high_gap_count,\n  medium_gap_count:   d.medium_gap_count,\n  low_gap_count:      d.low_gap_count,\n  gap_count:          d.gap_count,\n  all_gaps:           (d.all_gaps || []).slice(0, 20),\n  // 통합 Call Flow\n  integrated_flow:    d.integrated_flow    || {},\n  endpoint_match_rate: d.endpoint_match_rate || 100,\n  missing_in_actual:  d.missing_in_actual  || [],\n  extra_in_actual:    d.extra_in_actual    || [],\n  // 실패 Agent\n  failed_agents:      d.failed_agents      || [],\n  error:              null\n} }];"
+      },
+      "id": "ork-0023",
+      "name": "Calc Progress Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3380,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "ork-0024",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Manual Trigger / Schedule Trigger 결과도 동일한 응답 출력\nconst d = $input.first().json;\nconsole.log('=== WBS-ORK 최종 결과 ===');\nconsole.log(`진척률: ${d.total_progress}% [${d.progress_grade}]`);\nconsole.log(`설계 적합성: ${d.design_score}% [${d.design_grade}]`);\nconsole.log(`Jira: 완료 ${d.done_tickets}/${d.total_tickets} (${d.ticket_done_rate}%)`);\nconsole.log(`Commit: ${d.total_commits}회, 활성 ${d.max_active_days}일`);\nconsole.log(`Gap: 총 ${d.gap_count}건 (High:${d.high_gap_count}, Medium:${d.medium_gap_count}, Low:${d.low_gap_count})`);\nreturn [$input.first()];"
+      },
+      "id": "ork-0025",
+      "name": "Log Final Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:5678/webhook/wbs-rpt",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "retry": {
+            "maxTries": 3,
+            "waitBetweenTries": 30000
+          }
+        }
+      },
+      "id": "ork-0026",
+      "name": "Call WBS-RPT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3600,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## WBS-ORK — Orchestration Agent\n\n**트리거**: Webhook(wbs-ork) + Schedule(매주 금 17:00) + Manual\n\n**플로우**:\n1. Init Params → 주간 날짜 계산\n2. Call WBS-GRC → Repo 분류 + Commit 집계\n3. [병렬 6개] WBS-JRA / WBS-DDA / WBS-BAK / WBS-FRT / WBS-CFG / WBS-MOB\n4. Merge → Integrate (부분 실패 처리)\n5. Build Call Flow Map → Merge Design Gaps\n6. Ollama Gap Analysis (있을 때만)\n7. Calc Design Score → Calc Progress Score\n8. Respond (Webhook) / Log (Manual/Schedule)\n\n**진척률 가중치**:\n- Jira 티켓 완료율 × 40%\n- SP 소진률 × 40%\n- Commit 활성일 × 20%",
+        "height": 440,
+        "width": 380
+      },
+      "id": "ork-sticky-01",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        900
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Init Params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Init Params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Init Params",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init Params": {
+      "main": [
+        [
+          {
+            "node": "Call WBS-GRC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WBS-GRC": {
+      "main": [
+        [
+          {
+            "node": "Parse GRC Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse GRC Result": {
+      "main": [
+        [
+          {
+            "node": "Call WBS-JRA",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call WBS-DDA",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call WBS-BAK",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call WBS-FRT",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call WBS-CFG",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call WBS-MOB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WBS-JRA": {
+      "main": [
+        [
+          {
+            "node": "Merge All Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WBS-DDA": {
+      "main": [
+        [
+          {
+            "node": "Merge All Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Call WBS-BAK": {
+      "main": [
+        [
+          {
+            "node": "Merge All Results",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Call WBS-FRT": {
+      "main": [
+        [
+          {
+            "node": "Merge All Results",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Call WBS-CFG": {
+      "main": [
+        [
+          {
+            "node": "Merge All Results",
+            "type": "main",
+            "index": 4
+          }
+        ]
+      ]
+    },
+    "Call WBS-MOB": {
+      "main": [
+        [
+          {
+            "node": "Merge All Results",
+            "type": "main",
+            "index": 5
+          }
+        ]
+      ]
+    },
+    "Merge All Results": {
+      "main": [
+        [
+          {
+            "node": "Integrate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Integrate Results": {
+      "main": [
+        [
+          {
+            "node": "Build Call Flow Map",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Call Flow Map": {
+      "main": [
+        [
+          {
+            "node": "Merge Design Gaps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Design Gaps": {
+      "main": [
+        [
+          {
+            "node": "Build Gap Analysis Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Gap Analysis Prompt": {
+      "main": [
+        [
+          {
+            "node": "Has Gaps?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Gaps?": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Gap Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Gaps Pass",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Gap Analysis": {
+      "main": [
+        [
+          {
+            "node": "Parse Gap Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Gap Analysis": {
+      "main": [
+        [
+          {
+            "node": "Calc Design Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Gaps Pass": {
+      "main": [
+        [
+          {
+            "node": "Calc Design Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calc Design Score": {
+      "main": [
+        [
+          {
+            "node": "Calc Progress Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calc Progress Score": {
+      "main": [
+        [
+          {
+            "node": "Call WBS-RPT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call WBS-RPT": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Final Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": ""
+  }
+}
