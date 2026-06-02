@@ -4,6 +4,16 @@ append-only 로그. 각 항목은 `## [날짜] 작업유형 | 제목` 형식.
 
 ---
 
+## [2026-06-02] update | 프로젝트 정리 및 GitHub 초기 커밋
+
+- 프로젝트 폴더명 변경: `WBSCheckAgent` → `workflow_study`
+- 전체 문서 `WBSCheckAgent` 텍스트 → `workflow_study` 일괄 치환 (ixi-enterprise/docs, n8n/docs 포함)
+- Prisma Cloud API 실제 연동 필요 정보 정리 (Access Key ID, Secret Key, API Base URL)
+- `12-security-agent-requirements.md` 기준 Mock 서버 vs 실제 서버 전환 포인트 확인
+- GitHub 초기 커밋 및 Push 완료 (`enterprise-dev-lab/workflow_study`, master 브랜치)
+- Push Protection 차단: `env-setup.md` TEAMS_CLIENT_SECRET 평문 → 플레이스홀더 교체 후 재커밋
+- README.md 신규 작성 (프로젝트 구성, Agent 목록, 기술 스택)
+
 ## [2026-05-18] init | wiki 초기 구축
 
 - WIKI.md (schema), index.md, log.md, overview.md 생성

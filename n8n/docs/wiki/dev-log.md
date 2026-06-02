@@ -4,6 +4,31 @@
 
 ---
 
+## 2026-06-02 — ixi-enterprise 분석 문서 작성 및 프로젝트 파일 구조 정리
+
+### ixi-enterprise 신규 문서 작성
+
+| 파일 | 내용 |
+|------|------|
+| `05-ixi-enterprise-flow_analysis.md` | ixi-enterprise로 구현한 8개 워크플로우 분석 (스크린샷 기반) |
+| `06-ixi-enterprise-improvement-review.md` | ixi 워크플로우 n8n 대체 구현 — 노드 매핑, 디버깅/예외처리 한계, 구조적 한계 3가지 |
+| `07-ixi-enterprise-requirements-spec.md` | ixi-enterprise 개발팀 추가 개발 요구사항 명세서 (18개 REQ, 6개 분류) |
+
+### 파일 구조 정리
+
+- `ixi-enterprise/docs/` 하위 문서 4개 → 프로젝트 루트(`workflow_study/`)로 이동
+- 루트 이동 문서에 번호 접두사 추가: `01-` ~ `07-`
+- `ixi-enterprise/docs/` 하위 플로우 문서 파일명에서 숫자 접두사 제거 (`05-flow-overview.md` → `flow-overview.md` 등)
+- 루트 문서 파일명 변경 반영: `n8n_guide.md` → `01-n8n_guide.md` 등
+
+### README 업데이트
+
+- 프로젝트 루트 `README.md`: 새 파일 구조 트리 및 문서 목록 전면 갱신
+- `ixi-enterprise/docs/README.md`: 이동된 문서 링크 경로 수정, 구현된 워크플로우 8개 목록 및 보완점 요약 추가
+- `n8n/docs/wiki/README.md`: 루트 문서 파일명 변경 반영 (링크 경로 수정)
+
+---
+
 ## 2026-06-02 — n8n_project-summary.md 보강 및 workflow Sticky Note 추가
 
 ### n8n_project-summary.md 변경사항

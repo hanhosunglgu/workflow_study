@@ -8,14 +8,18 @@ ixi-enterprise 플로우 카탈로그를 학습하고, n8n Self-hosted 환경에
 
 ```
 workflow_study/
-├── ixi-enterprise/         # ixi-enterprise 플로우 카탈로그 분석 문서
-│   └── docs/               # 노드 카탈로그, 플로우 분석, 보안 에이전트 요구사항 등
-├── n8n/                    # WBS Check Agent 구현물
-│   ├── workflow/           # n8n 워크플로우 JSON 파일 (13개 Agent)
-│   └── docs/               # 개발 가이드, Phase별 구현 기록, wiki
-├── n8n_project-summary.md  # 전체 프로젝트 요약 (아키텍처, 노드 상세, 이슈 목록)
-├── n8n_guide.md            # n8n 핵심 개념 및 사용 가이드
-└── n8n_vs_ai_agent.md      # n8n과 AI Agent 프레임워크 비교 분석
+├── ixi-enterprise/                          # ixi-enterprise 플로우 카탈로그 분석 문서
+│   └── docs/                                # 노드 카탈로그, 플로우 분석, 보안 에이전트 요구사항 등
+├── n8n/                                     # WBS Check Agent 구현물
+│   ├── workflow/                            # n8n 워크플로우 JSON 파일 (13개 Agent)
+│   └── docs/                               # 개발 가이드, Phase별 구현 기록, wiki
+├── 01-n8n_guide.md                          # n8n 핵심 개념 및 사용 가이드
+├── 02-n8n_vs_ai_agent.md                    # n8n과 AI Agent 프레임워크 비교 분석
+├── 03-n8n_project-summary.md               # WBS Agent 전체 요약 (아키텍처, 노드 상세, 이슈 목록)
+├── 04-ixi-enterprise-node-catalog.md       # ixi-enterprise 노드 카탈로그 (20개 노드 상세)
+├── 05-ixi-enterprise-flow_analysis.md      # ixi-enterprise 구현 워크플로우 8개 분석
+├── 06-ixi-enterprise-improvement-review.md # ixi-enterprise 워크플로우 n8n 대체 구현 및 보완점 검토
+└── 07-ixi-enterprise-requirements-spec.md  # ixi-enterprise 개발팀 추가 개발 요구사항 명세서
 ```
 
 ---
@@ -57,17 +61,24 @@ total_progress = Jira 티켓 완료율 × 40%
 
 ---
 
-## ixi-enterprise 플로우 카탈로그 분석
+## 문서 목록
 
-ixi-enterprise에서 제공하는 n8n 플로우 패턴을 분석한 문서 모음입니다.
+### n8n 학습 및 WBS Agent 구현
 
 | 문서 | 내용 |
 |------|------|
-| 01-node-catalog.md | n8n 노드 종류 및 용도 정리 |
-| 02-current-flow-analysis.md | 현재 플로우 구조 분석 |
-| 03-n8n-implementation.md | n8n 구현 방법론 |
-| 05~11-flow-*.md | RAG, Agent Tool, Routing, Human Loop, Guardrail, MCP 플로우 패턴 |
-| 12-security-agent-requirements.md | 보안 솔루션 5종 연동 에이전트 요구사항 |
+| [01-n8n_guide.md](./01-n8n_guide.md) | n8n 핵심 개념, 노드 종류, MCP, Claude Code 연동 가이드 |
+| [02-n8n_vs_ai_agent.md](./02-n8n_vs_ai_agent.md) | n8n vs AI Agent 프레임워크 토큰 비용·장단점 비교 분석 |
+| [03-n8n_project-summary.md](./03-n8n_project-summary.md) | WBS Agent 전체 요약 (아키텍처, 13개 Agent 노드 상세, 이슈 21건) |
+
+### ixi-enterprise 분석 및 보완점 검토
+
+| 문서 | 내용 |
+|------|------|
+| [04-ixi-enterprise-node-catalog.md](./04-ixi-enterprise-node-catalog.md) | ixi-enterprise 20개 노드 파라미터·포트·제약 상세 (UI 검증 완료) |
+| [05-ixi-enterprise-flow_analysis.md](./05-ixi-enterprise-flow_analysis.md) | ixi-enterprise로 구현한 8개 워크플로우 구성 및 노드 설정 분석 |
+| [06-ixi-enterprise-improvement-review.md](./06-ixi-enterprise-improvement-review.md) | ixi 워크플로우를 n8n으로 대체 구현 시 노드 매핑, 디버깅·예외처리 한계 비교 |
+| [07-ixi-enterprise-requirements-spec.md](./07-ixi-enterprise-requirements-spec.md) | ixi-enterprise 개발팀 추가 개발 요구사항 명세서 (18개 REQ) |
 
 ---
 

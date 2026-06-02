@@ -1,6 +1,6 @@
 # 3rd WBS Agent — Wiki
 
-**마지막 업데이트**: 2026-06-02 (노드 요약 섹션 추가, Sticky Note 추가, Agent 순서 정렬)  
+**마지막 업데이트**: 2026-06-02 (노드 요약 섹션 추가, Sticky Note 추가, Agent 순서 정렬, 루트 문서 파일명 변경 반영)  
 **작성 방식**: Karpathy LLM Wiki 패턴 — LLM이 원본 소스를 컴파일하여 작성, 사람이 읽는 용도
 
 ---
@@ -22,9 +22,9 @@
 
 | 문서 | 설명 |
 |------|------|
-| [n8n_project-summary.md](../../n8n_project-summary.md) | 프로젝트 전체 요약 (Agent 노드 상세, 이슈 목록) |
-| [n8n_guide.md](../../n8n_guide.md) | n8n 완전 가이드 (배포, 노드, MCP, Claude Code 연동) |
-| [n8n_vs_ai_agent.md](../../n8n_vs_ai_agent.md) | n8n vs AI Agent 토큰 사용량 비교 분석 |
+| [03-n8n_project-summary.md](../../../03-n8n_project-summary.md) | 프로젝트 전체 요약 (Agent 노드 상세, 이슈 목록) |
+| [01-n8n_guide.md](../../../01-n8n_guide.md) | n8n 완전 가이드 (배포, 노드, MCP, Claude Code 연동) |
+| [02-n8n_vs_ai_agent.md](../../../02-n8n_vs_ai_agent.md) | n8n vs AI Agent 토큰 사용량 비교 분석 |
 
 ---
 
