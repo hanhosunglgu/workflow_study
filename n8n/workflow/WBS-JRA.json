@@ -255,6 +255,22 @@
         2880,
         300
       ]
+    },
+    {
+      "parameters": {
+        "content": "## WBS-JRA — Jira Sprint 분석기 (13노드)\n\n**역할**: 현재 활성 Sprint의 이슈를 전체 수집하고 상태별 집계·SP 소진율·커밋 연결을 분석해 반환.\n**Webhook**: POST /webhook/wbs-jra\n**출력**: {agent_id:'WBS-JRA', total_tickets, done, sp_burned_rate, ticket_done_rate, incomplete_tickets[]}\n\n**노드별 처리 Job**\n| # | 노드명 | 노드 타입 | 처리 내용 |\n|---|--------|----------|---------|\n| 1 | Webhook | Webhook | 요청 수신 |\n| 2 | Init Params | Code | board_id/base_url/project_keys/commit_messages 추출 |\n| 3 | GET Active Sprint | HTTP Request | GET /agile/1.0/board/{boardId}/sprint?maxResults=50. Jira API Token 인증. 3회 재시도 |\n| 4 | Extract Sprint ID | Code | state=active 필터링 (simple 보드 대응). sprintId/Name/Start/EndDate 추출 |\n| 5 | Init Pagination | Code | startAt:0, maxResults:100, allIssues:[] 페이지네이션 초기화 |\n| 6 | Pagination Loop | SplitInBatches | batchSize=1 루프. output[0]=완료→Aggregate / output[1]=배치→GET Issues |\n| 7 | GET Sprint Issues | HTTP Request | GET /sprint/{sprintId}/issue?startAt={n}&maxResults=100&fields=summary,status,customfield_10016,assignee |\n| 8 | Accumulate Issues | Code | 이슈 누적. nextStart 계산. hasMore = nextStart < total |\n| 9 | Has More Pages? | IF | hasMore 분기. true→Pagination Loop 복귀 / false→Aggregate Status |\n| 10 | Aggregate Status | Code | 상태 분류: todo/in_progress/in_review/done/other (한글 완료/진행중 포함). SP 소진율·완료율 계산 |\n| 11 | Map Commits to Jira | Code | 커밋 메시지에서 [A-Z]+-[0-9]+ 패턴으로 이슈 키 추출. linked_ticket_count 생성 |\n| 12 | Build Output | Code | agent_id:'WBS-JRA', repo_type:'jira' 추가, 빈 필드 초기화 |\n| 13 | Respond to Webhook | Respond | HTTP 200 응답 반환 |",
+        "height": 560,
+        "width": 1600,
+        "color": 5
+      },
+      "id": "d203cd05-2ee7-4c65-8bbd-4256b4ae0fee",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -60
+      ]
     }
   ],
   "connections": {

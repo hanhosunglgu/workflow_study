@@ -67,6 +67,22 @@
         720,
         300
       ]
+    },
+    {
+      "parameters": {
+        "content": "## WBS-TRG-002 — Cron 스케줄러 (3노드) 🚫 중단\n\n**역할**: 매주 금요일 17:00에 WBS-ORK를 자동 호출하는 스케줄 트리거.\n\n**노드별 처리 Job**\n| # | 노드명 | 노드 타입 | 처리 내용 |\n|---|--------|----------|---------|\n| 1 | Schedule Trigger | Schedule Trigger | cron 0 17 * * 5 — 매주 금요일 17:00 자동 실행 |\n| 2 | Call WBS-ORK | HTTP Request | POST /webhook/wbs-ork. body: {trigger:cron, schedule:weekly_friday_1700}. timeout 900초 |\n| 3 | Log Result | Code | total_progress 존재 여부로 성공/부분성공 판단 후 실행 요약 로그 생성 |",
+        "height": 300,
+        "width": 700,
+        "color": 4
+      },
+      "id": "4c217615-3f97-4e08-b36e-29a3d2ba859e",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        140
+      ]
     }
   ],
   "connections": {
@@ -100,8 +116,14 @@
   },
   "staticData": null,
   "tags": [
-    { "name": "wbs", "createdAt": "2026-05-15" },
-    { "name": "trigger", "createdAt": "2026-05-15" }
+    {
+      "name": "wbs",
+      "createdAt": "2026-05-15"
+    },
+    {
+      "name": "trigger",
+      "createdAt": "2026-05-15"
+    }
   ],
   "triggerCount": 1,
   "updatedAt": "2026-05-15T00:00:00.000Z",

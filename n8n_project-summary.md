@@ -182,8 +182,8 @@ WBS-ORK 내부 실행 순서:
 | **WBS-TRG-001** | Teams Bot 명령 수신·파싱·라우팅 | - | `/webhook/teams-trigger` | ✅ |
 | **WBS-TRG-002** | Cron 스케줄러 (매주 금 17:00) | 3 | 내부 트리거 | 🚫 중단 |
 | **WBS-ORK** | 전체 오케스트레이터 | 26 | `/webhook/wbs-ork` | ✅ |
-| **WBS-JRA** | Jira Sprint 티켓·SP 수집 | 13 | `/webhook/wbs-jra` | ✅ |
 | **WBS-GRC** | GitHub Repo 분류 + Commit/PR 집계 | 16 | `/webhook/wbs-grc` | ✅ |
+| **WBS-JRA** | Jira Sprint 티켓·SP 수집 | 13 | `/webhook/wbs-jra` | ✅ |
 | **WBS-DDA** | 설계 문서 파싱·Gap 탐지 | 9 | `/webhook/wbs-dda` | ✅ |
 | **WBS-BAK** | Backend 코드 분석·Call Flow 추출 | 12 | `/webhook/wbs-bak` | ✅ |
 | **WBS-FRT** | Frontend API 호출 패턴 분석 | 12 | `/webhook/wbs-frt` | ✅ |
@@ -339,6 +339,118 @@ Teams Bot Framework가 `POST /webhook/teams-trigger`로 전송하는 Activity JS
 
 ---
 
+#### WBS-GRC — GitHub Repo 분류기 (20노드)
+
+> 📄 [`workflow/WBS-GRC.json`](../workflow/WBS-GRC.json)
+
+| # | 노드명 | Input | 처리 기능 | Output |
+|---|--------|-------|-----------|--------|
+| 1 | **Webhook** | HTTP POST `/webhook/wbs-grc` | 요청 수신 (`responseMode: responseNode`) | body (`owner`, `repos[]`) |
+| 2 | **Init Params** | body | `owner`/`repos` 추출, **이번 주 월~현재** `since`/`until` 계산 | `{owner, repos[], since, until}` |
+| 3 | **GET User Repos** | `owner` | `GET api.github.com/users/{owner}/repos?per_page=100` GitHub PAT 인증. 3회 재시도 | GitHub Repo 목록 (fullResponse) |
+| 4 | **Check Rate Limit** | fullResponse | `x-ratelimit-remaining/limit` 헤더 파싱. 사용률 80% 이상이면 `rate_limit_warning:true` | `{repos[], rate_limit{}, rate_limit_warning}` |
+| 5 | **IF Rate Limit Warning** | `rate_limit_warning` | 80% 초과 여부 분기 | true→Warn / false→Merge |
+| 6 | **Warn Rate Limit** | warning=true | Teams Webhook으로 Rate Limit 경보 Adaptive Card 전송 (사용률%, 남은 요청 수) | Teams 응답 → Merge |
+| 7 | **Merge After Rate Check** | 경보/정상 두 경로 | 두 경로 합류 | Repo 목록 |
+| 8 | **Filter & Split Repos** | Repo 목록 | `filterList` 있으면 해당 Repo만 필터링. **각 Repo를 별도 item으로 분리** | `{owner, repo, full_name, since, until}` 배열 |
+| 9 | **Loop Over Repos** | Repo item들 | `SplitInBatches(batchSize=1)` 루프. output[0]=완료→Classify / output[1]=배치→GET Root | 현재 Repo 1개 |
+| 10 | **GET Root Contents** | 현재 Repo | `GET api.github.com/repos/{full_name}/contents/` 루트 파일 목록 조회 | 루트 파일 목록 |
+| 11 | **Attach Repo Info** | Root Contents | 파일명 배열 추출, Loop 컨텍스트에서 `owner/since/until` 복원 | `{owner, repo, full_name, since, until, file_names[]}` |
+| 12 | **GET Commits This Week** | Repo 정보 | `GET /commits?since={since}&until={until}&per_page=100` 이번 주 커밋 조회 | 커밋 목록 |
+| 13 | **GET Merged PRs** | Repo 정보 | `GET /pulls?state=closed&sort=updated&per_page=50` 최근 PR 조회 | PR 목록 |
+| 14 | **Aggregate Commits** | 커밋 목록 | 메시지 최대 30개, **평일(월~금)만** `active_days` 산출 | `{commit_count, active_days, commit_messages[]}` |
+| 15 | **Aggregate PRs** | PR 목록 | `merged_at >= since` 필터링. PR 번호/제목/작성자 정리 (최대 20개) | `{merged_pr_count, merged_prs[]}` |
+| 16 | **Merge Commit & PR** | Commits + PRs | 두 집계 합류 | 2개 아이템 스트림 |
+| 17 | **Build Repo Stats** | Merge 결과 | prData/commitData 구분 후 단일 Repo 통계로 병합 → Loop 복귀 | Repo 완성 통계 1개 |
+| 18 | **Classify Repos** | 전체 Repo 통계 | 5단계 우선순위 분류: mobile→config→backend→frontend→unknown. 전체 커밋 집계 | `{backend[], frontend[], config[], mobile[], commit_stats{}}` |
+| 19 | **Build Output** | Classify 결과 | `agent_id:'WBS-GRC'` 추가, 최종 구조 정규화 | 최종 JSON |
+| 20 | **Respond to Webhook** | 최종 JSON | HTTP 200 응답 반환 | — |
+
+**Check Rate Limit — 80% 경고 기준**
+
+GitHub REST API는 인증된 요청 기준 시간당 5,000건 한도가 있으며, 초과 시 `403 Forbidden`으로 모든 호출이 차단된다. WBS-GRC는 Repo당 최소 4건(Repo 목록·루트 파일·커밋·PR)을 호출하므로 Repo가 많을수록 소모량이 빠르게 증가한다.
+
+| 구간 | 상태 | 동작 |
+|------|------|------|
+| 0~80% | 정상 | 계속 실행 |
+| 80% 도달 | ⚠️ 경고 | Teams 경보 발송 후 계속 실행 |
+| 100% 초과 | ❌ 차단 | GitHub API 전체 거부 |
+
+80% 시점에 경고를 보내는 이유는 **남은 20%(약 1,000건)로 현재 실행을 완료할 여유를 확보**하면서, 동시에 운영자가 **다음 실행 전에 대응할 시간**을 주기 위해서다. 100%에서 감지하면 이미 API가 막혀 경고 전송 자체도 실패할 수 있다.
+
+**분류 기준 패턴**:
+- `mobile`: `Podfile`, `pubspec.yaml`, `Package.swift`, `build.gradle`
+- `config`: `*.tf`, `helmfile.yaml`, `k8s/`, `infra/`
+- `backend`: `pom.xml`, `requirements.txt`, `go.mod`, `Cargo.toml`
+- `frontend`: `next.config.*`, `vite.config.*`, `angular.json`, `package.json`(서버 엔트리 없는 경우)
+
+**GET /repos/{owner}/{repo}/contents/ 응답 구조**
+
+루트 경로(`/`)를 조회하면 파일·디렉토리 항목의 **배열**로 반환된다.
+
+```json
+[
+  {
+    "type": "file",
+    "name": "README.md",
+    "path": "README.md",
+    "sha": "abc123def456...",
+    "size": 1234,
+    "url": "https://api.github.com/repos/owner/repo/contents/README.md",
+    "html_url": "https://github.com/owner/repo/blob/main/README.md",
+    "git_url": "https://api.github.com/repos/owner/repo/git/blobs/abc123...",
+    "download_url": "https://raw.githubusercontent.com/owner/repo/main/README.md",
+    "encoding": null,
+    "content": null,
+    "_links": {
+      "self": "https://api.github.com/repos/owner/repo/contents/README.md",
+      "git": "https://api.github.com/repos/owner/repo/git/blobs/abc123...",
+      "html": "https://github.com/owner/repo/blob/main/README.md"
+    }
+  },
+  {
+    "type": "dir",
+    "name": "src",
+    "path": "src",
+    "sha": "def456abc123...",
+    "size": 0,
+    "url": "https://api.github.com/repos/owner/repo/contents/src",
+    "html_url": "https://github.com/owner/repo/tree/main/src",
+    "git_url": "https://api.github.com/repos/owner/repo/git/trees/def456...",
+    "download_url": null,
+    "_links": { ... }
+  }
+]
+```
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `type` | string | `"file"` / `"dir"` / `"symlink"` / `"submodule"` |
+| `name` | string | 파일 또는 폴더명 (`README.md`, `src`) |
+| `path` | string | 루트 기준 전체 경로 (`src/utils/helper.js`) |
+| `sha` | string | Git blob/tree SHA |
+| `size` | number | 파일 크기(bytes). 디렉토리는 `0` |
+| `download_url` | string \| null | 파일 raw 텍스트 직접 다운로드 URL. 디렉토리는 `null` |
+| `content` | string \| null | 디렉토리 조회 시 `null`. 단일 파일 조회 시 Base64 인코딩 내용 |
+| `encoding` | string \| null | 단일 파일 조회 시 `"base64"`. 디렉토리 조회 시 `null` |
+
+**WBS-GRC에서 사용하는 필드**
+
+`Attach Repo Info` 노드에서 `name` 필드만 추출해 파일명 배열을 만들고, `Classify Repos` 노드의 분류 기준 패턴과 매칭한다.
+
+```
+file_names: ["Podfile", "package.json", "requirements.txt", "README.md", ...]
+                  ↓
+    mobile? → config? → backend? → frontend? 순서로 패턴 매칭
+```
+
+**주의사항**
+- 디렉토리 조회 시 하위 항목을 재귀적으로 반환하지 않음 — 한 depth만 반환
+- 파일이 1MB 초과이면 `download_url`로만 접근 가능, `content` 필드 비어있음
+- 비공개 Repo는 GitHub PAT 인증 필수 (WBS-GRC 이슈 #18 원인)
+
+---
+
 #### WBS-JRA — Jira Sprint 분석기 (13노드)
 
 > 📄 [`workflow/WBS-JRA.json`](../workflow/WBS-JRA.json)
@@ -422,9 +534,9 @@ Jira Sprint 이슈를 페이지네이션으로 수집한 뒤 상태별로 집계
 | 4 | **Wrap Commits** | fullResponse | `resp.body`에서 커밋 배열 추출. 커밋 0개여도 1개 아이템 보장 | `{commits[], owner, repo, since, until}` |
 | 5 | **Extract Commit Info** | 커밋 목록 | SHA 최대 5개, 메시지 최대 20개, `active_days` Set 계산. **커밋 0개이면 `_skip_llm:true`** 즉시 반환 | SHA 목록 또는 skip 플래그 |
 | 6 | **GET Commit Files** | `shas[0]` | `GET /repos/{owner}/{repo}/commits/{sha}` 최신 커밋 변경 파일+patch 조회 | 변경 파일 목록 |
-| 7 | **Build Ollama Request** | 변경 파일 | 라우터/컨트롤러 파일 우선 필터링(`routes/`, `controllers/`, `api/` 등). patch 800자/전체 2000자 압축. 프롬프트: endpoints+call_flow JSON 추출. 모델: `gpt-4.1-mini` | `{_meta{}, model, messages[], stream}` |
+| 7 | **Build OpenAI Request** | 변경 파일 | 라우터/컨트롤러 파일 우선 필터링(`routes/`, `controllers/`, `api/` 등). patch 800자/전체 2000자 압축. 프롬프트: endpoints+call_flow JSON 추출. 모델: `gpt-4.1-mini` | `{_meta{}, model, messages[], stream}` |
 | 8 | **Skip LLM?** | `_skip_llm` | `_skip_llm===true` 분기. true→빈 결과 직행 / false→OpenAI 호출 | 두 경로 |
-| 9 | **Ollama Extract Call Flow** | messages | `POST api.openai.com/v1/chat/completions` Bearer 인증. timeout 600초 | OpenAI 응답 |
+| 9 | **OpenAI Extract Call Flow** | messages | `POST api.openai.com/v1/chat/completions` Bearer 인증. timeout 600초 | OpenAI 응답 |
 | 10 | **Parse & Build Output** | OpenAI 응답 또는 skip | JSON 파싱. `_meta`에서 repo/커밋 정보 복원 | `{agent_id:'WBS-BAK', repo_type:'backend', call_flow[], extracted_endpoints[], commit_count, active_days}` |
 | 11 | **Aggregate Results** | 복수 Repo 결과 | 1개면 그대로, 2개 이상이면 `results[]` 배열로 묶음 | 통합 결과 |
 | 12 | **Respond to Webhook** | 통합 결과 | HTTP 200 응답 반환 | — |
@@ -445,43 +557,8 @@ WBS-BAK와 동일한 12노드 구조. Agent별 차이점:
 | 파일 필터 확장자 | `.js/.ts/.jsx/.tsx/.vue/.svelte` | `.yaml/.yml/.json/.toml/.tf/.conf` | `.swift/.kt/.dart/.tsx/.jsx` |
 | LLM 추출 목표 | API 호출 패턴 + 컴포넌트 흐름 | 인프라 config 항목 + 변경사항 | 화면 전환 흐름 + API 호출 |
 | 빈 결과 키 | `api_calls:[]` | `config_items:[]` | `screens:[]` |
-| OpenAI 노드명 | `Ollama Extract API Calls` | `Ollama Extract Config` | `Ollama Extract Screen Flow` |
+| OpenAI 노드명 | `OpenAI Extract API Calls` | `OpenAI Extract Config` | `OpenAI Extract Screen Flow` |
 | LLM 출력 JSON 키 | `{api_calls[], call_flow[]}` | `{config_items[], call_flow[]}` | `{screens[], call_flow[]}` |
-
----
-
-#### WBS-GRC — GitHub Repo 분류기 (20노드)
-
-> 📄 [`workflow/WBS-GRC.json`](../workflow/WBS-GRC.json)
-
-| # | 노드명 | Input | 처리 기능 | Output |
-|---|--------|-------|-----------|--------|
-| 1 | **Webhook** | HTTP POST `/webhook/wbs-grc` | 요청 수신 (`responseMode: responseNode`) | body (`owner`, `repos[]`) |
-| 2 | **Init Params** | body | `owner`/`repos` 추출, **이번 주 월~현재** `since`/`until` 계산 | `{owner, repos[], since, until}` |
-| 3 | **GET User Repos** | `owner` | `GET api.github.com/users/{owner}/repos?per_page=100` GitHub PAT 인증. 3회 재시도 | GitHub Repo 목록 (fullResponse) |
-| 4 | **Check Rate Limit** | fullResponse | `x-ratelimit-remaining/limit` 헤더 파싱. 사용률 80% 이상이면 `rate_limit_warning:true` | `{repos[], rate_limit{}, rate_limit_warning}` |
-| 5 | **IF Rate Limit Warning** | `rate_limit_warning` | 80% 초과 여부 분기 | true→Warn / false→Merge |
-| 6 | **Warn Rate Limit** | warning=true | Teams Webhook으로 Rate Limit 경보 Adaptive Card 전송 (사용률%, 남은 요청 수) | Teams 응답 → Merge |
-| 7 | **Merge After Rate Check** | 경보/정상 두 경로 | 두 경로 합류 | Repo 목록 |
-| 8 | **Filter & Split Repos** | Repo 목록 | `filterList` 있으면 해당 Repo만 필터링. **각 Repo를 별도 item으로 분리** | `{owner, repo, full_name, since, until}` 배열 |
-| 9 | **Loop Over Repos** | Repo item들 | `SplitInBatches(batchSize=1)` 루프. output[0]=완료→Classify / output[1]=배치→GET Root | 현재 Repo 1개 |
-| 10 | **GET Root Contents** | 현재 Repo | `GET api.github.com/repos/{full_name}/contents/` 루트 파일 목록 조회 | 루트 파일 목록 |
-| 11 | **Attach Repo Info** | Root Contents | 파일명 배열 추출, Loop 컨텍스트에서 `owner/since/until` 복원 | `{owner, repo, full_name, since, until, file_names[]}` |
-| 12 | **GET Commits This Week** | Repo 정보 | `GET /commits?since={since}&until={until}&per_page=100` 이번 주 커밋 조회 | 커밋 목록 |
-| 13 | **GET Merged PRs** | Repo 정보 | `GET /pulls?state=closed&sort=updated&per_page=50` 최근 PR 조회 | PR 목록 |
-| 14 | **Aggregate Commits** | 커밋 목록 | 메시지 최대 30개, **평일(월~금)만** `active_days` 산출 | `{commit_count, active_days, commit_messages[]}` |
-| 15 | **Aggregate PRs** | PR 목록 | `merged_at >= since` 필터링. PR 번호/제목/작성자 정리 (최대 20개) | `{merged_pr_count, merged_prs[]}` |
-| 16 | **Merge Commit & PR** | Commits + PRs | 두 집계 합류 | 2개 아이템 스트림 |
-| 17 | **Build Repo Stats** | Merge 결과 | prData/commitData 구분 후 단일 Repo 통계로 병합 → Loop 복귀 | Repo 완성 통계 1개 |
-| 18 | **Classify Repos** | 전체 Repo 통계 | 5단계 우선순위 분류: mobile→config→backend→frontend→unknown. 전체 커밋 집계 | `{backend[], frontend[], config[], mobile[], commit_stats{}}` |
-| 19 | **Build Output** | Classify 결과 | `agent_id:'WBS-GRC'` 추가, 최종 구조 정규화 | 최종 JSON |
-| 20 | **Respond to Webhook** | 최종 JSON | HTTP 200 응답 반환 | — |
-
-**분류 기준 패턴**:
-- `mobile`: `Podfile`, `pubspec.yaml`, `Package.swift`, `build.gradle`
-- `config`: `*.tf`, `helmfile.yaml`, `k8s/`, `infra/`
-- `backend`: `pom.xml`, `requirements.txt`, `go.mod`, `Cargo.toml`
-- `frontend`: `next.config.*`, `vite.config.*`, `angular.json`, `package.json`(서버 엔트리 없는 경우)
 
 ---
 
@@ -841,42 +918,142 @@ JIRA_API_TOKEN=<token>
 
 ---
 
-## 9. Agent Output 표준 스키마
+## 9. 사용 노드 요약
 
-모든 Specialist Agent는 WBS-ORK에 다음 스키마로 결과를 반환한다.
+이번 프로젝트에서 사용된 n8n 노드 타입을 기준으로 분류·집계한 전체 요약이다.
 
-```json
-{
-  "agent_id": "WBS-BAK",
-  "repo": "WBS_Check",
-  "repo_type": "backend",
-  "call_flow": [
-    {
-      "from": "Frontend",
-      "to": "POST /api/auth/login",
-      "handler": "AuthController.login()",
-      "calls": ["AuthService.validate()", "UserRepository.findByEmail()"]
-    }
-  ],
-  "design_gaps": [
-    {
-      "item": "POST /api/user/register",
-      "discrepancy_type": "spec_changed",
-      "severity": "high",
-      "design": "필드: username, password, email",
-      "actual": "필드: user_name, password, email_address"
-    }
-  ],
-  "commit_count": 8,
-  "active_days": 3
-}
-```
+**전체 노드 수: 147개** (10개 Agent 합산 — TRG-001 17 + ORK 26 + GRC 20 + JRA 13 + DDA 9 + BAK 12 + FRT 12 + CFG 12 + MOB 12 + RPT 7 + TRG-002 3 + ERR 4)
 
-`discrepancy_type` enum: `not_implemented` / `extra_implementation` / `spec_changed`  
-`severity` enum: `high` / `medium` / `low`
+### 노드 타입별 사용 현황
 
-> 📄 [`schema/agent-output-schema.json:1`](schema/agent-output-schema.json) — 전체 JSON Schema 정의  
-> 📄 [`wiki/agents.md:24`](wiki/agents.md) — 표준 Output 스키마 설명 및 예시
+| 노드 타입 | 사용 수 | 역할 |
+|-----------|---------|------|
+| **Code** | 약 40개 | JS 커스텀 로직 전반 — 데이터 파싱, 프롬프트 조립, 진척률 계산, Gap 분석 등 |
+| **HTTP Request** | 약 30개 | 외부 API 호출 — GitHub, Jira, OpenAI, Teams, Microsoft OAuth2 |
+| **Webhook** | 9개 | 각 Agent의 Sub-workflow 진입점 (`/webhook/wbs-*`) |
+| **Respond to Webhook** | 7개 | 각 Agent의 HTTP 200 응답 반환 |
+| **IF** | 7개 | 조건 분기 — 명령어 라우팅, Gap 존재 여부, Rate Limit 경고, Skip LLM 등 |
+| **Merge** | 6개 | 복수 경로 합류 — 분기 재합류, 멀티 Agent 결과 수렴 |
+| **Set** | 5개 | 필드 평탄화·추출 — Init Params, 메시지 파싱 등 |
+| **Schedule Trigger** | 2개 | Cron 기반 자동 실행 — WBS-ORK(매주 금 17:00), WBS-TRG-002 |
+| **Manual Trigger** | 1개 | n8n UI 수동 실행 (WBS-ORK 테스트용) |
+| **Error Trigger** | 1개 | 다른 워크플로 에러 발생 시 자동 수신 (WBS-ERR) |
+| **SplitInBatches** | 1개 | Repo·Sprint 이슈 루프 처리 (WBS-GRC, WBS-JRA) |
+| **OpenAI** | 5개 | LLM 호출 — 설계 문서 파싱, Call Flow 추출, Gap intent 분석 |
+
+---
+
+### 노드 타입별 상세
+
+#### Code 노드
+프로젝트 전체에서 가장 많이 사용된 노드. n8n 내장 노드만으로 처리하기 어려운 복잡한 로직을 JavaScript로 직접 구현한다.
+
+| 용도 | 사용 Agent | 주요 처리 내용 |
+|------|-----------|--------------|
+| 파라미터 초기화 | 전체 Agent | 환경변수 로드, 날짜 범위 계산, 기본값 설정 |
+| 데이터 파싱 | 전체 Agent | API 응답 정제, JSON 추출, 필드 재구성 |
+| 프롬프트 조립 | DDA, BAK, FRT, CFG, MOB, ORK | 파일 내용·코드 diff를 LLM 프롬프트로 변환, 토큰 절단 |
+| 진척률 계산 | ORK | Jira 완료율 × 40% + SP 소진율 × 40% + 활성일율 × 20% |
+| Gap 분석 | ORK | design_gaps 수집·통합·중복 제거, 심각도 집계 |
+| Call Flow 비교 | ORK | DDA endpoints vs BAK endpoints 비교, match_rate 계산 |
+| 상태 집계 | JRA | Sprint 이슈 상태 분류(한글 포함), SP 소진율 산출 |
+| Repo 분류 | GRC | 루트 파일명 패턴으로 mobile/config/backend/frontend 분류 |
+| 보고서 조립 | RPT | 진척률 등급 이모지 매핑, Teams Adaptive Card 페이로드 생성 |
+| 명령어 파싱 | TRG-001 | HTML 태그 제거, 명령어 키워드 추출 및 매핑 |
+| 에러 메시지 생성 | ERR | 워크플로명·노드명·KST 타임스탬프 조합 알림 텍스트 생성 |
+
+---
+
+#### HTTP Request 노드
+외부 서비스와의 모든 통신을 담당한다. n8n 내장 인증(Basic, Bearer, Header) 방식을 활용하며 `neverError`, 재시도 횟수, timeout을 각 호출 특성에 맞게 설정한다.
+
+| 호출 대상 | 사용 Agent | 주요 엔드포인트 |
+|-----------|-----------|--------------|
+| GitHub REST API | GRC, BAK, FRT, CFG, MOB, DDA | `/users/{owner}/repos`, `/repos/{repo}/commits`, `/repos/{repo}/pulls`, `/repos/{repo}/contents/` |
+| Jira Cloud API | JRA, TRG-001 | `/rest/agile/1.0/board/{id}/sprint`, `/rest/api/3/issue/{key}` |
+| OpenAI API | DDA, BAK, FRT, CFG, MOB, ORK | `POST /v1/chat/completions` (timeout 600초) |
+| Microsoft OAuth2 | TRG-001, ERR | `POST /oauth2/v2.0/token` (client_credentials) |
+| Teams Bot Framework | TRG-001, ERR | `POST {serviceUrl}v3/conversations/{convId}/activities` |
+| Teams Webhook | GRC, RPT | Power Automate Incoming Webhook (Adaptive Card 전송) |
+| Sub-workflow 호출 | ORK, TRG-001, TRG-002 | `POST /webhook/wbs-*` (내부 Agent 간 HTTP 통신) |
+
+---
+
+#### Webhook / Respond to Webhook 노드
+각 Sub-workflow의 진입·출구를 담당한다. `responseMode: responseNode`로 설정해 응답 타이밍을 하위 노드가 직접 제어한다.
+
+| Agent | Webhook 경로 | Respond 위치 |
+|-------|------------|-------------|
+| TRG-001 | `/webhook/teams-trigger` | 노드 #4 (즉시 200 반환 후 비동기 처리) |
+| ORK | `/webhook/wbs-ork` | 노드 #25 |
+| GRC | `/webhook/wbs-grc` | 노드 #20 |
+| JRA | `/webhook/wbs-jra` | 노드 #13 |
+| DDA | `/webhook/wbs-dda` | 노드 #9 |
+| BAK | `/webhook/wbs-bak` | 노드 #12 |
+| RPT | `/webhook/wbs-rpt` | 노드 #7 |
+
+---
+
+#### IF 노드
+조건에 따라 워크플로 실행 경로를 분기한다. `true` / `false` 두 출력 포트로 각각 다른 노드에 연결된다.
+
+| 노드명 | 조건 | true 경로 | false 경로 |
+|--------|------|----------|-----------|
+| IF 진척률 | `command === '진척률'` | Fire WBS-ORK | IF 코드검증 |
+| IF 코드검증 | `command === '코드검증'` | Fire WBS-ORK | IF 티켓 |
+| IF 티켓 | `command === '티켓'` | HTTP Jira 조회 | IF 도움말 |
+| IF 도움말 | `command === '도움말'` | Build Reply 도움말 | Build Reply Unknown |
+| IF Rate Limit Warning | `used_pct >= 80` | Warn Rate Limit | Merge |
+| Has Gaps? | `_skip_ollama !== true` | OpenAI Gap Analysis | No Gaps Pass |
+| Skip LLM? | `_skip_llm === true` | 빈 결과 직행 | OpenAI Extract Call Flow |
+
+---
+
+#### Merge 노드
+복수의 분기 경로를 하나의 스트림으로 합류시킨다. `numberInputs` 파라미터로 입력 수를 지정하며, 모든 입력이 도착해야 다음 노드로 진행한다.
+
+| 노드명 | 입력 수 | 합류 경로 |
+|--------|--------|---------|
+| Merge - 응답 통합 | 3 | 티켓 응답 / 도움말 / Unknown |
+| Merge After Rate Check | 2 | Rate Limit 경보 경로 / 정상 경로 |
+| Merge Commit & PR | 2 | 커밋 집계 / PR 집계 |
+| Merge All Results | 6 | JRA / DDA / BAK / FRT / CFG / MOB 전체 결과 수렴 |
+| Merge Design Gaps | 1 | Gap 분석 완료 후 통합 |
+| No Gaps Pass | 1 | Gap 없음 패스스루 |
+
+---
+
+#### SplitInBatches 노드
+배열 데이터를 1개씩 꺼내 루프를 구성한다. `output[0]`(완료)과 `output[1]`(배치) 두 포트의 순서를 반드시 정확히 연결해야 하며, 잘못 연결하면 무한루프가 발생한다 (이슈 #12 원인).
+
+| 사용 위치 | 루프 대상 | 완료 포트 연결 |
+|-----------|---------|-------------|
+| GRC - Loop Over Repos | Repo 목록 (1개씩) | Classify Repos |
+| JRA - Pagination Loop | Sprint 이슈 페이지 (1페이지씩) | Aggregate Status |
+
+---
+
+#### OpenAI 노드
+`POST /v1/chat/completions`를 호출해 LLM 분석을 수행한다. 모든 호출에 `stream: false`를 명시해 n8n의 스트리밍 미지원 문제를 방지한다 (이슈 #3 원인). 모델은 초기 Ollama(`qwen2.5-coder:7b`)에서 `gpt-4.1-mini`로 전환되었다.
+
+| 노드명 | 사용 Agent | 추출 목표 |
+|--------|-----------|---------|
+| OpenAI Extract Structure | DDA | `endpoints / tables / sequences` (설계 문서 파싱) |
+| OpenAI Extract Call Flow | BAK | `endpoints / call_flow` (Backend 코드 분석) |
+| OpenAI Extract API Calls | FRT | `api_calls / call_flow` (Frontend 코드 분석) |
+| OpenAI Extract Config | CFG | `config_items / call_flow` (IaC 코드 분석) |
+| OpenAI Extract Screen Flow | MOB | `screens / call_flow` (Mobile 코드 분석) |
+| OpenAI Gap Analysis | ORK | Gap별 `intent_analysis / recommendation` 분류 |
+
+---
+
+#### Schedule Trigger / Manual Trigger / Error Trigger 노드
+
+| 노드 타입 | 사용 위치 | 동작 |
+|-----------|---------|------|
+| Schedule Trigger | ORK, TRG-002 | cron `0 17 * * 5` — 매주 금요일 17:00 자동 실행 |
+| Manual Trigger | ORK | n8n UI에서 수동 실행 (개발·테스트용) |
+| Error Trigger | ERR | 다른 워크플로에서 에러 발생 시 자동 수신, Teams 에러 알림 발송 |
 
 ---
 

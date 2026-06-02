@@ -434,6 +434,22 @@
         1560,
         300
       ]
+    },
+    {
+      "parameters": {
+        "content": "## WBS-GRC — GitHub Repo 분류기 (20노드)\n\n**역할**: GitHub Repo를 유형별로 분류하고 이번 주 Commit/PR을 집계해 반환.\n**Webhook**: POST /webhook/wbs-grc\n**출력**: {agent_id:'WBS-GRC', backend[], frontend[], config[], mobile[], commit_stats{}}\n\n**노드별 처리 Job**\n| # | 노드명 | 노드 타입 | 처리 내용 |\n|---|--------|----------|---------|\n| 1 | Webhook | Webhook | 요청 수신. responseMode:responseNode |\n| 2 | Init Params | Code | owner/repos 추출, 이번 주 월요일~현재 since/until 계산 |\n| 3 | GET User Repos | HTTP Request | GET /users/{owner}/repos?per_page=100. GitHub PAT 인증. 3회 재시도 |\n| 4 | Check Rate Limit | Code | x-ratelimit-remaining/limit 헤더 파싱. 사용률 계산. 80% 이상이면 rate_limit_warning:true |\n| 5 | IF Rate Limit Warning | IF | used_pct >= 80 분기. true→Warn / false→Merge |\n| 6 | Warn Rate Limit | HTTP Request | Teams Webhook으로 Rate Limit 경보 Adaptive Card 전송 |\n| 7 | Merge After Rate Check | Merge | 경보/정상 두 경로 합류 |\n| 8 | Filter & Split Repos | Code | filterList 필터링 후 각 Repo를 별도 item으로 분리 |\n| 9 | Loop Over Repos | SplitInBatches | batchSize=1 루프. output[0]=완료→Classify / output[1]=배치→GET Root |\n| 10 | GET Root Contents | HTTP Request | GET /repos/{full_name}/contents/ 루트 파일 목록 조회 |\n| 11 | Attach Repo Info | Code | 파일명 배열 추출, Loop 컨텍스트에서 owner/since/until 복원 |\n| 12 | GET Commits This Week | HTTP Request | GET /commits?since={since}&until={until}&per_page=100 |\n| 13 | GET Merged PRs | HTTP Request | GET /pulls?state=closed&sort=updated&per_page=50 |\n| 14 | Aggregate Commits | Code | 메시지 최대 30개, 평일(월~금)만 active_days 산출 |\n| 15 | Aggregate PRs | Code | merged_at >= since 필터링. PR 번호/제목/작성자 정리 (최대 20개) |\n| 16 | Merge Commit & PR | Merge | 커밋/PR 두 집계 합류 |\n| 17 | Build Repo Stats | Code | prData/commitData 구분 후 단일 Repo 통계로 병합 → Loop 복귀 |\n| 18 | Classify Repos | Code | 우선순위 분류: mobile→config→backend→frontend→unknown (루트 파일명 패턴 매칭) |\n| 19 | Build Output | Code | agent_id:'WBS-GRC' 추가, 최종 구조 정규화 |\n| 20 | Respond to Webhook | Respond | HTTP 200 응답 반환 |\n\n**분류 기준**: mobile(Podfile/pubspec.yaml) → config(*.tf/helmfile.yaml) → backend(pom.xml/go.mod) → frontend(next.config/vite.config)",
+        "height": 600,
+        "width": 1800,
+        "color": 5
+      },
+      "id": "1764e726-d4eb-4c78-803c-cd0ca6329839",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -100
+      ]
     }
   ],
   "connections": {

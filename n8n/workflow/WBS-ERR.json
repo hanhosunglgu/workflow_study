@@ -89,6 +89,22 @@
         912,
         0
       ]
+    },
+    {
+      "parameters": {
+        "content": "## WBS-ERR — 전역 에러 핸들러 (4노드) 🚫 중단\n\n**역할**: 다른 워크플로에서 에러 발생 시 자동으로 수신해 Teams 채널에 에러 알림을 발송.\n\n**노드별 처리 Job**\n| # | 노드명 | 노드 타입 | 처리 내용 |\n|---|--------|----------|---------|\n| 1 | Error Trigger | Error Trigger | n8n 내부 에러 이벤트 수신. workflow.name / execution.lastNodeExecuted / execution.error.* 포함 |\n| 2 | Build Error Message | Code | 워크플로명/노드명/에러 메시지/KST 타임스탬프/실행 로그 URL 조합 알림 텍스트 생성 |\n| 3 | Get Token | HTTP Request | POST /oauth2/v2.0/token client_credentials로 Bot Framework 토큰 발급. 재시도 2회, 10초 간격 |\n| 4 | Send Error to Teams | HTTP Request | TEAMS_WEBHOOK_URL로 Adaptive Card 전송. 헤더: 🚨 WBS Agent 오류 발생 (Attention 색상). 재시도 2회 |",
+        "height": 380,
+        "width": 900,
+        "color": 1
+      },
+      "id": "d397c946-58af-4f8b-b538-e41de9b6f04e",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -160
+      ]
     }
   ],
   "pinData": {},

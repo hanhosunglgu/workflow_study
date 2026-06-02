@@ -182,6 +182,22 @@
         2220,
         -80
       ]
+    },
+    {
+      "parameters": {
+        "content": "## WBS-DDA — 설계 문서 분석기 (9노드)\n\n**역할**: GitHub repo의 .md 설계 문서를 가져와 OpenAI로 파싱해 endpoints/tables/sequences를 추출.\n**Webhook**: POST /webhook/wbs-dda\n**출력**: {agent_id:'WBS-DDA', repo_type:'design_doc', endpoints[], tables[], sequences[]}\n\n**노드별 처리 Job**\n| # | 노드명 | 노드 타입 | 처리 내용 |\n|---|--------|----------|---------|\n| 1 | Webhook | Webhook | 요청 수신 (owner, repo, path) |\n| 2 | Init Params | Code | owner/repo/path 추출 (환경변수 fallback). 미설정 시 에러 throw |\n| 3 | GET Design Doc List | HTTP Request | GET /repos/{owner}/{repo}/contents/{path}. GitHub PAT 인증. fullResponse |\n| 4 | Filter MD Files | Code | .md 확장자 + type=file 필터링. 없으면 에러 throw. {name, download_url} 배열로 묶음 |\n| 5 | GET File Content | HTTP Request | files[0].download_url로 첫 번째 .md 파일 raw 텍스트 다운로드 (responseFormat:text) |\n| 6 | Build OpenAI Request | Code | ## {파일명}\n{내용} 조합 후 3000자 절단. endpoints/tables/sequences JSON 추출 프롬프트 조립 |\n| 7 | OpenAI Extract Structure | HTTP Request | POST api.openai.com/v1/chat/completions. Bearer 인증. timeout 600초. stream:false |\n| 8 | Parse & Build Output | Code | choices[0].message.content 추출. ```json 블록 또는 순수 JSON 정규식 파싱. 실패 시 빈 구조체 fallback |\n| 9 | Respond to Webhook | Respond | HTTP 200 응답 반환 |\n\n**주의**: SplitInBatches Loop 제거 후 첫 번째 파일만 처리 (typeVersion 3 + 단일 아이템 → done 즉시 이동 버그로 재구현)",
+        "height": 460,
+        "width": 1400,
+        "color": 5
+      },
+      "id": "0c020b1e-50f7-4f7a-93b3-dd19fedaba99",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        460,
+        -280
+      ]
     }
   ],
   "connections": {

@@ -4,6 +4,159 @@
 
 ---
 
+## 2026-06-02 — n8n_project-summary.md 보강 및 workflow Sticky Note 추가
+
+### n8n_project-summary.md 변경사항
+
+#### 노드명 일괄 변경 — Ollama → OpenAI
+
+WBS-BAK / WBS-FRT / WBS-CFG / WBS-MOB 4개 Agent의 노드명에서 `Ollama`를 `OpenAI`로 변경.
+이전 LLM 엔진(Ollama)에서 전환된 실제 구현(gpt-4.1-mini)을 정확히 반영.
+
+| 변경 전 | 변경 후 |
+|---------|---------|
+| `Build Ollama Request` | `Build OpenAI Request` |
+| `Ollama Extract Call Flow` | `OpenAI Extract Call Flow` |
+| `Ollama Extract API Calls` | `OpenAI Extract API Calls` |
+| `Ollama Extract Config` | `OpenAI Extract Config` |
+| `Ollama Extract Screen Flow` | `OpenAI Extract Screen Flow` |
+
+#### WBS-GRC 섹션 보강
+
+- `Check Rate Limit` 노드 소스코드 분석 및 80% 경고 기준 설명 추가
+- `GET /repos/{owner}/{repo}/contents/` API 응답 구조 상세 추가 (필드 설명 표, WBS-GRC 활용 방식, 주의사항)
+
+#### Agent 섹션 순서 변경
+
+실행 흐름 기준으로 WBS-GRC를 WBS-ORK 바로 아래로 이동.
+
+| 변경 전 순서 | 변경 후 순서 |
+|------------|------------|
+| TRG-001 → ORK → JRA → DDA → BAK → FRT/CFG/MOB → **GRC** → RPT | TRG-001 → ORK → **GRC** → JRA → DDA → BAK → FRT/CFG/MOB → RPT |
+
+3. Agent 구성(13개) 표의 행 순서도 동일하게 정렬.
+
+#### 9번 섹션 전면 교체 — Agent Output 표준 스키마 → 사용 노드 요약
+
+| 항목 | 내용 |
+|------|------|
+| 전체 노드 수 | **147개** (10개 Agent + 3개 트리거/지원 워크플로) |
+| 노드 타입별 현황 표 | Code(약 40) / HTTP Request(약 30) / Webhook(9) / Respond(7) / IF(7) / Merge(6) 등 |
+| 타입별 상세 섹션 | Code / HTTP Request / Webhook / IF / Merge / SplitInBatches / OpenAI / Trigger 각각 상세 |
+
+### workflow JSON Sticky Note 추가
+
+13개 workflow JSON 파일 전체에 n8n Sticky Note 노드 추가.  
+WBS-ORK, WBS-RPT, WBS-INT는 기존 Sticky Note 유지. 나머지 10개 신규 추가.
+
+| 파일 | 주요 내용 |
+|------|---------|
+| WBS-TRG-001.json | 17노드 전체 처리 Job 표, Teams Bot Framework 비동기 패턴 |
+| WBS-TRG-002.json | 3노드 Cron 스케줄러 역할 |
+| WBS-GRC.json | 20노드 처리 Job 표, Rate Limit 80% 기준, 분류 패턴 |
+| WBS-JRA.json | 13노드 처리 Job 표, 페이지네이션 루프, 한글 상태 집계 |
+| WBS-DDA.json | 9노드 처리 Job 표, SplitInBatches 제거 이유, 3000자 절단 |
+| WBS-BAK.json | 12노드 처리 Job 표, 파일 필터 우선순위, _meta 패턴 |
+| WBS-FRT.json | 12노드 처리 Job 표, Frontend 경로/확장자 필터 |
+| WBS-CFG.json | 12노드 처리 Job 표, IaC 경로/확장자 필터 |
+| WBS-MOB.json | 12노드 처리 Job 표, Mobile 경로/확장자 필터 |
+| WBS-ERR.json | 4노드 에러 핸들러 역할 |
+
+### docs 업데이트
+
+- `agents.md`: Agent 목록 순서 정렬, WBS-TRG-002/ERR 🚫 중단 표시, WBS-GRC 상세 보강, BAK/FRT/CFG/MOB 노드명·파일 필터 정확화
+- `dev-log.md`: 이번 세션 변경사항 기록
+
+---
+
+## 2026-06-02 — 프로젝트 정리 및 GitHub 초기 커밋
+
+### 프로젝트 폴더명 변경
+
+- `WBSCheckAgent` → `workflow_study` 로 변경
+- 메모리 폴더 이동: `.claude/projects/-Users-hosunghan-workplace-mvp-WBSCheckAgent/` → `.claude/projects/-Users-hosunghan-workplace-mvp-workflow_study/`
+- 프로젝트 전체 `WBSCheckAgent` 텍스트 → `workflow_study` 일괄 치환 (docs, wiki, n8n_project-summary.md 포함)
+
+### Prisma Cloud API 연동 정보 정리
+
+ixi-enterprise 보안 에이전트 시스템에서 Prisma CSPM 실제 API 연동 시 필요한 정보:
+- **Access Key ID + Secret Key**: Prisma Cloud 콘솔 → Settings → Access Keys에서 발급
+- **API Base URL**: 콘솔 → Settings → Profile → API Endpoint (리전별 상이, 예: `api.prismacloud.io`)
+- JWT 유효시간 10분 → n8n에서 자동 갱신 로직 필요
+
+### n8n_project-summary.md Accumulate Issues 노드 상세 추가
+
+WBS-JRA 워크플로의 `Aggregate Status` 노드 소스코드 분석 내용을 문서화:
+- 이슈 상태 5개 버킷 분류 로직 (done/in_review/in_progress/todo/other)
+- SP(Story Point) 소진율 및 티켓 완료율 계산 공식
+- 출력 필드 전체 정리
+
+### GitHub 초기 커밋 및 Push
+
+- remote: `[MASKED_EMAIL]:enterprise-dev-lab/workflow_study.git`
+- 브랜치: `master`
+- 커밋 메시지: `ixi-Enterprise workflow 의 이해를 위한 N8N 프로젝트 개발기`
+- 포함 파일: 69개 (ixi-enterprise docs, n8n workflow JSON 13개, n8n docs/wiki 전체)
+- Push Protection 차단 이슈: `env-setup.md:16` TEAMS_CLIENT_SECRET 평문 노출 → `<your-client-secret>` 플레이스홀더로 교체 후 `--amend` 재커밋
+
+### README.md 작성
+
+프로젝트 루트에 README.md 신규 작성:
+- 프로젝트 구성 트리
+- WBS Check Agent 개요 및 Agent 목록 표
+- 진척률 계산 공식
+- ixi-enterprise 플로우 카탈로그 분석 문서 목록
+- 기술 스택 및 개발 기간
+
+---
+
+## 2026-06-02 — 문서화 세션 (n8n 가이드 및 프로젝트 요약 작성)
+
+### 생성/수정된 문서
+
+| 파일 | 위치 | 내용 |
+|------|------|------|
+| `n8n_vs_ai_agent.md` | 프로젝트 루트 | n8n vs AI Agent 토큰 사용량 비교, 장단점, 하이브리드 전략 |
+| `n8n_guide.md` | 프로젝트 루트 | n8n 완전 가이드 (배포 방식, 인증, LLM 모델, 노드 종류, MCP, Claude Code 연동) |
+| `n8n_project-summary.md` | 프로젝트 루트 | WBS Agent 프로젝트 전체 요약 (Agent별 노드 상세, 이슈 목록, 환경설정) |
+
+### n8n_vs_ai_agent.md 주요 수정
+
+토큰 관점 정확도 검토 및 섹션별 수정:
+- 2.1 실시간 이벤트 트리거: AI Agent 폴링으로 가능하나 토큰/운영 비용 추가 명시
+- 2.2 400+ API 통합: 토큰 우위 → 개발·운영 비용 우위로 프레임 수정 (바이브코딩으로 직접 구현 가능)
+- 2.3 장기 실행: 외부 메모리(Vector DB, Redis)로 AI Agent도 가능하나 구현 복잡도·토큰 차이 명시
+- 2.6 컴플라이언스: 중앙 로그 서버로 AI Agent도 가능하나 의사결정 근거 기록 불가 명시
+
+### n8n_guide.md 주요 내용
+
+- 배포 방식 3가지 분류: A.오픈소스 직접 설치 / B.Railway 등 PaaS 원클릭 / C.n8n 공식 클라우드 SaaS
+- AI Agent 연동 DB: SQL(PostgreSQL/MySQL 등), NoSQL(MongoDB/Redis 등), SaaS(Supabase/Airtable 등) 추가
+- Tool 노드 최신화: SerpAPI Deprecated → 공식 커뮤니티 노드 대체, Think Tool 없음 정정, MCP Client Tool 2025.04 신규 명시
+- 노드별 상세 사용법 및 🔴 많이 쓰는 노드 표시
+- MCP Server/Client 역할 방향 정정: n8n=MCP 서버(도구 제공), AI에이전트=MCP 클라이언트(도구 호출)
+- n8n-MCP 브릿지 역할 상세 설명 (없을 때 vs 있을 때 비교, 동작 구조 다이어그램)
+
+### n8n_project-summary.md 주요 내용
+
+- 시스템 아키텍처 전체 노드 box 형태 세로 다이어그램으로 재작성
+- Agent별 노드 상세 동작: 모든 workflow JSON 직접 읽어 Input/처리기능/Output 표로 작성
+- WBS-TRG-001: Teams Bot Framework raw JSON 전체 구조 추가 (Activity 전체 필드, HTTP 헤더, JWT 구조)
+- Teams Bot 명령어 상태: 모두 ✅ 구현 완료로 업데이트
+- WBS-TRG-002, WBS-ERR 🚫 중단 표시
+- Agent 섹션 순서 재정렬: TRG-001 → ORK → JRA → DDA → BAK → FRT/CFG/MOB → GRC → RPT → TRG-002 → ERR
+
+### workflow 폴더 정리
+
+불필요한 임시/테스트 파일 9개 삭제:
+- TEMP-Check-Fields/IssueTypes/Sprint/Jira-Setup.json (Jira API 탐색용 디버깅)
+- TEST-Confluence/GitHub-PAT/Jira/Ollama.json (자격증명 검증용)
+- Teams Bot - n8n Webhook.json (WBS-TRG-001 이전 초기 버전)
+
+**정리 후 남은 파일**: WBS-BAK/CFG/DDA/ERR/FRT/GRC/INT/JRA/MOB/ORK/RPT/TRG-001/TRG-002 (13개)
+
+---
+
 ## 2026-05-20 — Post-Phase 버그 수정 / design_score 정상화
 
 ### WBS-FRT / WBS-CFG / WBS-MOB 재작성

@@ -261,6 +261,22 @@
         2672,
         -80
       ]
+    },
+    {
+      "parameters": {
+        "content": "## WBS-FRT — Frontend 코드 분석기 (12노드)\n\n**역할**: Frontend repo의 최신 커밋 변경 파일을 OpenAI로 분석해 API 호출 패턴과 컴포넌트 흐름을 추출.\n**Webhook**: POST /webhook/wbs-frt\n**출력**: {agent_id:'WBS-FRT', repo_type:'frontend', api_calls[], call_flow[], commit_count, active_days}\n\n**노드별 처리 Job** (WBS-BAK와 동일한 12노드 구조)\n| # | 노드명 | 노드 타입 | 처리 내용 |\n|---|--------|----------|---------|\n| 1 | Webhook | Webhook | 요청 수신 |\n| 2 | Init Params | Code | owner, repos[], since/until 추출. repos 배열 item 분리 |\n| 3 | GET Commits | HTTP Request | GET /repos/{owner}/{repo}/commits. GitHub PAT. fullResponse |\n| 4 | Wrap Commits | Code | 커밋 배열 추출. 0개여도 1개 아이템 보장 |\n| 5 | Extract Commit Info | Code | SHA/메시지/active_days 추출. 커밋 0개이면 _skip_llm:true |\n| 6 | GET Commit Files | HTTP Request | 최신 커밋 변경 파일+patch 조회 |\n| 7 | Build OpenAI Request | Code | 대상 경로: api/ services/ hooks/ store/ pages/ views/. 확장자: .js/.ts/.jsx/.tsx/.vue/.svelte |\n| 8 | Skip LLM? | IF | _skip_llm 분기 |\n| 9 | OpenAI Extract API Calls | HTTP Request | POST /v1/chat/completions. {api_calls[], call_flow[]} JSON 추출 |\n| 10 | Parse & Build Output | Code | JSON 파싱. _meta에서 컨텍스트 복원 |\n| 11 | Aggregate Results | Code | 복수 repo 결과 병합 |\n| 12 | Respond to Webhook | Respond | HTTP 200 응답 반환 |",
+        "height": 480,
+        "width": 1400,
+        "color": 6
+      },
+      "id": "b812f4f7-6c62-4702-b298-8250395abc8a",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        464,
+        -380
+      ]
     }
   ],
   "connections": {

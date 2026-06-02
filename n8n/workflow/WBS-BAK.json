@@ -261,6 +261,22 @@
         1900,
         -224
       ]
+    },
+    {
+      "parameters": {
+        "content": "## WBS-BAK — Backend 코드 분석기 (12노드)\n\n**역할**: Backend repo의 최신 커밋 변경 파일을 OpenAI로 분석해 API endpoints와 call_flow를 추출.\n**Webhook**: POST /webhook/wbs-bak\n**출력**: {agent_id:'WBS-BAK', repo_type:'backend', call_flow[], extracted_endpoints[], commit_count, active_days}\n\n**노드별 처리 Job**\n| # | 노드명 | 노드 타입 | 처리 내용 |\n|---|--------|----------|---------|\n| 1 | Webhook | Webhook | 요청 수신 |\n| 2 | Init Params | Code | owner, repos[], since(기본 -7일), until 추출. repos 배열 각 항목을 별도 item으로 분리 |\n| 3 | GET Commits | HTTP Request | GET /repos/{owner}/{repo}/commits?since={since}&until={until}&per_page=50. GitHub PAT. fullResponse |\n| 4 | Wrap Commits | Code | resp.body에서 커밋 배열 추출. 커밋 0개여도 1개 아이템 보장 |\n| 5 | Extract Commit Info | Code | SHA 최대 5개, 메시지 최대 20개, active_days Set 계산. 커밋 0개이면 _skip_llm:true 즉시 반환 |\n| 6 | GET Commit Files | HTTP Request | GET /repos/{owner}/{repo}/commits/{sha} 최신 커밋 변경 파일+patch 조회 |\n| 7 | Build OpenAI Request | Code | routes/controllers/api 경로 파일 우선 필터링. patch 800자/전체 2000자 압축. _meta 패턴으로 컨텍스트 보존 |\n| 8 | Skip LLM? | IF | _skip_llm===true 분기. true→빈 결과 직행 / false→OpenAI 호출 |\n| 9 | OpenAI Extract Call Flow | HTTP Request | POST api.openai.com/v1/chat/completions. timeout 600초. endpoints/call_flow JSON 추출 |\n| 10 | Parse & Build Output | Code | JSON 파싱. _meta에서 repo/커밋 정보 복원 |\n| 11 | Aggregate Results | Code | 1개 repo면 그대로, 2개 이상이면 results[] 배열로 묶음 |\n| 12 | Respond to Webhook | Respond | HTTP 200 응답 반환 |\n\n**파일 우선순위**: routes/ > controllers/ > api/ > endpoints/ → 없으면 .js/.ts/.py/.java/.go/.rb 최대 5개",
+        "height": 480,
+        "width": 1400,
+        "color": 6
+      },
+      "id": "9fac3ab9-c688-4d2e-8e6f-d02f80463ac7",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        464,
+        -380
+      ]
     }
   ],
   "connections": {

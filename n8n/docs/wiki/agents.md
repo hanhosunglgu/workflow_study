@@ -4,14 +4,15 @@
 
 ## Agent 목록
 
+아래 순서는 실행 흐름 순서와 동일하다 (n8n_project-summary.md 섹션 순서 기준).
+
 | Agent ID | 이름 | 유형 | 상태 | 설명 |
 |----------|------|------|------|------|
 | WBS-TRG-001 | Teams Trigger | Trigger | ✅ Phase 5 완료 | Teams Bot Webhook 수신, 명령어 파싱, 라우팅 |
-| WBS-TRG-002 | Scheduler Trigger | Trigger | ✅ Phase 5 완료 | 매주 금요일 17:00 Cron 실행 |
-| WBS-ERR | Error Workflow | Support | ✅ Phase 5 완료 | 전역 오류 발생 시 Teams 채널 에러 알림 (4노드) |
+| WBS-TRG-002 | Scheduler Trigger | Trigger | 🚫 중단 | 매주 금요일 17:00 Cron 실행 |
 | WBS-ORK | Orchestration Agent | Orchestrator | ✅ Phase 3 완료 | Repo 분류, 병렬 Agent 조율, 결과 통합, Call Flow 재구성 |
-| WBS-JRA | Jira Agent | Specialist | ✅ Phase 2 완료 | Sprint 티켓 수집, 상태 집계, Story Point 소진률 계산 |
 | WBS-GRC | GitHub Repo Classifier | Specialist | ✅ 완료 | Repo 목록 스캔, Backend/Frontend/Config/Mobile 유형 분류, Commit 집계 |
+| WBS-JRA | Jira Agent | Specialist | ✅ Phase 2 완료 | Sprint 티켓 수집, 상태 집계, Story Point 소진률 계산 |
 | WBS-DDA | Design Doc Agent | Specialist | ✅ 완료 | 설계 문서(.md) 파싱, API 명세/ERD/시퀀스 구조 추출 |
 | WBS-BAK | Backend Agent | Specialist | ✅ 완료 | API 라우터/컨트롤러 분석, Call Flow 시퀀스 생성, Gap 추출 |
 | WBS-FRT | Frontend Agent | Specialist | ✅ 완료 | 컴포넌트/API 호출 패턴 분석, 화면-API 연결 시퀀스 생성, Gap 추출 |
@@ -19,6 +20,7 @@
 | WBS-MOB | Mobile Agent | Specialist | ✅ 완료 | iOS/Android/Flutter 화면 흐름 및 API 시퀀스 분석, Gap 추출 |
 | WBS-INT | Integration Test | Test | ✅ 완료 | 6개 Agent 인라인 통합 (57노드), Phase 1 통합 테스트용 |
 | WBS-RPT | Report Agent | Output | ✅ Phase 4 완료 | Teams 채널 Adaptive Card 메시지 전송 |
+| WBS-ERR | Error Workflow | Support | 🚫 중단 | 전역 오류 발생 시 Teams 채널 에러 알림 (4노드) |
 
 ---
 
@@ -76,13 +78,20 @@
 
 - **Webhook**: `POST /webhook/wbs-grc`
 - **입력**: `{ owner, repos[] }`
-- **동작**: 루트 파일 패턴으로 Repo 유형 분류
-  - `vite.config.*` / React 의존성 → `frontend`
-  - `pom.xml` / `requirements.txt` / Express routes → `backend`
-  - `*.tf` / `k8s/` / `docker-compose.*` → `config`
-  - `Podfile` / `pubspec.yaml` / `build.gradle` → `mobile`
-- **분류 우선순위**: mobile > backend > frontend > config
-- **출력**: `{ backend:[...], frontend:[...], config:[...], mobile:[...], _classified_detail:{} }`
+- **구성**: 20노드
+- **동작**:
+  1. `GET /users/{owner}/repos` 전체 Repo 목록 조회. GitHub PAT 인증. 3회 재시도
+  2. `Check Rate Limit` — `x-ratelimit-remaining/limit` 헤더 파싱. 사용률 80% 이상이면 Teams 경보 발송 후 계속 실행
+  3. `SplitInBatches` 루프로 Repo 1개씩 처리
+  4. `GET /repos/{full_name}/contents/` 루트 파일 목록으로 Repo 유형 분류
+  5. 이번 주 Commit/PR 집계 (평일만 `active_days` 산출)
+- **분류 기준 (우선순위 순)**:
+  - `mobile`: `Podfile`, `pubspec.yaml`, `Package.swift`, `build.gradle`
+  - `config`: `*.tf`, `helmfile.yaml`, `k8s/`, `infra/`
+  - `backend`: `pom.xml`, `requirements.txt`, `go.mod`, `Cargo.toml`
+  - `frontend`: `next.config.*`, `vite.config.*`, `angular.json`, `package.json`(서버 엔트리 없는 경우)
+- **Rate Limit 80% 경고**: 남은 20%(약 1,000건)로 현재 실행 완료 여유 확보 + 운영자 사전 대응 시간 확보
+- **출력**: `{ agent_id:'WBS-GRC', backend[], frontend[], config[], mobile[], commit_stats{} }`
 - **실제 테스트 결과**: WBS_Check → `frontend` (Vite 패턴 감지)
 
 ---
@@ -112,11 +121,12 @@
 - **동작**:
   1. 이번 주 변경 커밋 목록 조회 (`since/until` 날짜 필터)
   2. 최신 커밋(`shas[0]`)의 변경 파일 목록 수집
-  3. `routes/`, `controllers/`, `.router.js` 패턴 필터링
-  4. SplitInBatches로 각 파일 내용 조회
-  5. Ollama API → 실제 API 엔드포인트 및 Call Flow 추출
+  3. `routes/`, `controllers/`, `api/`, `handler.` 패턴 우선 필터링 → 없으면 `.js/.ts/.py/.java/.go/.rb` 최대 5개 폴백
+  4. OpenAI API → 실제 API 엔드포인트 및 Call Flow 추출 (`gpt-4.1-mini`, stream:false)
+  5. `_meta` 패턴으로 repo/커밋 컨텍스트 보존 후 Parse 노드에서 복원
 - **출력**: `{ agent_id, repo, repo_type:'backend', extracted_endpoints[], call_flow[], commit_count, active_days }`
 - **실제 테스트 결과**: routes/index.js에서 5개 엔드포인트 추출, commits=8
+- **노드명 변경**: `Build Ollama Request` → `Build OpenAI Request`, `Ollama Extract Call Flow` → `OpenAI Extract Call Flow`
 
 ---
 
@@ -126,11 +136,11 @@
 - **입력**: `{ owner, repos:['WBS_Check'] }`
 - **동작**:
   1. 이번 주 변경 파일 목록 조회
-  2. `.tsx/.jsx/.vue/service.ts/service.js/api/` 경로 패턴 필터
-  3. SplitInBatches로 각 파일 내용 조회
-  4. Ollama API → API 호출 패턴(fetch/axios URL, 메서드) 및 화면 흐름 추출
-- **출력**: `{ agent_id, repo, repo_type:'frontend', api_calls[], screen_flow[], call_flow[] }`
+  2. `api/`, `services/`, `hooks/`, `store/`, `pages/`, `views/` 경로 패턴 필터. 확장자: `.js/.ts/.jsx/.tsx/.vue/.svelte`
+  3. OpenAI API → API 호출 패턴 및 컴포넌트 흐름 추출 (`gpt-4.1-mini`)
+- **출력**: `{ agent_id, repo, repo_type:'frontend', api_calls[], call_flow[] }`
 - **실제 테스트 결과**: src/api/authService.js에서 5개 API 호출 추출
+- **노드명 변경**: `Build Ollama Request` → `Build OpenAI Request`, `Ollama Extract API Calls` → `OpenAI Extract API Calls`
 
 ---
 
@@ -139,10 +149,11 @@
 - **Webhook**: `POST /webhook/wbs-cfg`
 - **입력**: `{ owner, repos:['WBS_Check'] }`
 - **동작**:
-  1. `.tf/.yaml/.yml/dockerfile/docker-compose/helm/k8s` 파일 필터
-  2. Ollama API → 인프라 구성 요소 추출 및 설계 Gap 분석
-- **출력**: `{ agent_id, repo, repo_type:'config', components[], design_gaps[], call_flow[] }`
+  1. `config/`, `helm/`, `k8s/`, `terraform/` 경로 필터. 확장자: `.yaml/.yml/.json/.toml/.tf/.conf`
+  2. OpenAI API → 인프라 config 항목 추출 및 변경사항 분석 (`gpt-4.1-mini`)
+- **출력**: `{ agent_id, repo, repo_type:'config', config_items[], call_flow[] }`
 - **실제 테스트 결과**: docker-compose.yml에서 2 services + 1 volume, design_gaps 3건 (hardcoded password High)
+- **노드명 변경**: `Build Ollama Request` → `Build OpenAI Request`, `Ollama Extract Config` → `OpenAI Extract Config`
 
 ---
 
@@ -151,11 +162,11 @@
 - **Webhook**: `POST /webhook/wbs-mob`
 - **입력**: `{ owner, repos:['WBS_Check'] }`
 - **동작**:
-  1. `.swift/.kt/.dart/viewcontroller/screen./activity./fragment./viewmodel.` 패턴 필터
-  2. `lib/screens/`, `lib/views/`, `lib/widgets/`, `lib/services/`, `lib/repositories/` 경로 포함
-  3. Ollama API → 화면 흐름 및 API 호출 시퀀스 추출
-- **출력**: `{ agent_id, repo, repo_type:'mobile', screen_flow[], api_calls[], design_gaps[] }`
+  1. `screens/`, `pages/`, `navigation/`, `api/`, `services/` 경로 필터. 확장자: `.swift/.kt/.dart/.tsx/.jsx`
+  2. OpenAI API → 화면 전환 흐름 및 API 호출 시퀀스 추출 (`gpt-4.1-mini`)
+- **출력**: `{ agent_id, repo, repo_type:'mobile', screens[], call_flow[] }`
 - **실제 테스트 결과**: screen_flow=1, api_calls=1, design_gaps=2 (lib/screens/login_screen.dart 기준)
+- **노드명 변경**: `Build Ollama Request` → `Build OpenAI Request`, `Ollama Extract Screen Flow` → `OpenAI Extract Screen Flow`
 
 ---
 
