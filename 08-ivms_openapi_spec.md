@@ -114,6 +114,22 @@
 
 ---
 
+### 공통 인증 헤더
+
+모든 오퍼레이션은 아래 5개 헤더를 공통으로 요구한다. 실제 curl 테스트(`orgList` 호출)로 확인됨.
+
+| Header Key | 필수 | 샘플 값 | 설명 |
+|---|---|---|---|
+| `X-Global-Transaction-ID` | Y | `test` | 전역 트랜잭션 ID. 호출 건별 추적용 식별자(실 운영 시 요청마다 고유값 발급 필요 — 캡처 샘플은 `test` 고정값 사용) |
+| `X-APP-NAME` | Y | `IVMS` | 호출 애플리케이션명. IVMS 연동 시 고정값 `IVMS` |
+| `X-AuthorizationTime` | Y | `20250804T145618+0900` | 인증 서명 생성 시각. `YYYYMMDDTHHmmss+0900` 형식(KST, ISO 8601 basic format) |
+| `X-Header-Authorization` | Y | `kzS7dQYRUHWC7sZb1W1Q+4OzPQEwjJ1fGVMehFOEOMjXbk22ntCbdOICw7JP15d5H4fDC4fI73hOiL0SuOgGdW==` | 인증 서명 값(HMAC 등으로 생성된 서명 문자열로 추정, Base64 유사 인코딩). `X-AuthorizationTime`과 페어로 매 요청마다 재계산 필요 — 서명 생성 알고리즘은 IVMS 운영팀 확인 필요 |
+| `Content-Type` | POST만 Y | `application/json` | POST 요청(Body 존재) 시에만 필요 |
+
+> ⚠️ **미확인 사항**: `X-Header-Authorization`의 서명 생성 알고리즘(HMAC-SHA256 등), 서명 대상 문자열 구성 규칙(URL+시각+바디 등), `X-Global-Transaction-ID`의 실제 채번 규칙은 이 캡처만으로는 특정할 수 없다. IVMS 운영팀에 서명 생성 스펙을 별도로 확인해야 실 운영 배포가 가능하다.
+
+---
+
 ## 1. cmmCode (시스템보안_공통코드관리)
 
 ### 1.0 API 기본 정보
@@ -1588,7 +1604,7 @@ filters:
 
 ### 4.2 취약점 항목별 상세조회 — `POST /ivms/api/scanResultCodeMngtDetail` (IF-API-099501)
 
-> **불일치 확인**: 서브 리소스 목록표의 endpoint는 `/scanResultCodeMngtDetail`이나, 실제 curl 테스트(`vulnerabilityInfo_취약점정보/api_test/`)의 요청 URL은 `/ivms/api/mngtListDetail`로 캡처되어 있어 표기가 서로 다름. 실제 서버에서 사용하는 endpoint 확정이 필요함.
+> **endpoint 확정(2026-07-10, 실제 curl로 검증 완료)**: 이전에는 "scanResultCodeMngtDetail 검증용"이라며 제공된 curl들의 실제 요청 URL이 반복해서 `/ivms/api/mngtListDetail`로 캡처되어(2-3절과 동일 요청이 잘못 재사용됨) endpoint 확정이 두 차례 번복되었다. 이번에 새로 제공된 curl은 요청 URL이 `https://ivms.lguplus.co.kr/ivms/api/scanResultCodeMngtDetail`로 정확히 캡처되었고, 응답도 `scanRsltCodeList[]` 구조(아래 출력 스펙과 일치)로 정상 반환되어 **`/scanResultCodeMngtDetail`이 실제 endpoint임이 최초로 명확히 검증됨**. 아래 요청/응답 예시를 이번 캡처 기준으로 갱신함.
 
 **입력 데이터 (Body)**
 
@@ -1621,17 +1637,19 @@ filters:
 ```json
 {
   "userId": "admin",
-  "asstCode": ["SSRCCE3-000747", "SSRCCE3-000492", "SSRCCE1-000529"],
-  "hostNm": ["absdb1", "lbsh1", "verfdba1"],
+  "asstCode": ["SSRCCE3-000747", "SSRCCE3-000492"],
+  "hostNm": ["lbsh1", "absdb1"],
   "resultStatusCdListStr": "[\"FAIL\"]",
   "vadaYn": "N",
-  "asstType": "SSRCCE",
   "severity": "4",
-  "atemplateNo": "151"
+  "asstType": "SSRCCE",
+  "atemplateNo": "151",
+  "page": 1,
+  "pageSize": 50
 }
 ```
 
-> **실제 curl 테스트로 확인**: `resultStatusCdListStr`은 JSON 배열을 문자열로 직렬화한 값(`"[\"FAIL\"]"`)으로 전달됨. 필드명은 `assetCode`가 아닌 `asstCode`로 확인됨.
+> **실제 curl 테스트로 확인(2026-07-10, URL `/ivms/api/scanResultCodeMngtDetail`로 정확히 캡처됨)**: `resultStatusCdListStr`은 JSON 배열을 문자열로 직렬화한 값(`"[\"FAIL\"]"`)으로 전달됨. 필드명은 `assetCode`가 아닌 `asstCode`로 확인됨. `page`/`pageSize`도 함께 전달됨이 확인됨.
 
 **출력 데이터 (Body)**
 
@@ -1691,37 +1709,38 @@ filters:
   "result": {
     "scanRsltCodeList": [
       {
-        "asstId": "ASST_000000000000297",
-        "asstCode": "SSRCCE1-028277",
-        "mgmtOrgId": "",
-        "asstNm": "AIX7",
-        "hostNm": "AIX7",
+        "asstId": "ASST_000000000104147",
+        "asstCode": "SSRCCE3-000747",
+        "mgmtOrgId": "org_000979",
+        "asstNm": "absdb1",
+        "hostNm": "absdb1",
         "asstType": "SSRCCE",
-        "asstLCtgrId": "AT_0004286",
-        "asstMCtgrId": "AT_0004291",
-        "asstSCtgrId": "AT_0004292",
-        "ipAddrStr": "192.168.2.155",
-        "asstLCtgrNm": "OS",
-        "asstMCtgrNm": "AIX",
-        "scanIfKey": "10000000001761644",
-        "resultIfKey": "1761644",
-        "ifKey": "64462414",
-        "assetIfKey": 28277,
-        "profileIfKey": 644,
-        "guidelineIfKey": 27741,
+        "asstLCtgrId": "AT_0005481",
+        "asstMCtgrId": "AT_0005481",
+        "asstSCtgrId": "",
+        "ipAddrStr": "172.21.44.90,100.40.3,90.100.10.3,90.100.110.3,90.100.10.3,192.168.224.2",
+        "asstLCtgrNm": "DB",
+        "asstMCtgrNm": "ALTIBASE",
+        "asstSCtgrNm": "",
+        "scanIfKey": "10000001563918357",
+        "resultIfKey": "156395",
+        "ifKey": "7421364",
+        "assetIfKey": 747,
+        "profileIfKey": 1837,
+        "guidelineIfKey": 81348,
         "asrcId": "",
         "asrcVer": 0,
-        "agentServerNm": "CCE1",
-        "profileNm": "test0327",
-        "regulationNm": "SSR_기준항목",
-        "guidelineCd": "U-103",
-        "createdTime": "2025-04-02 15:36:29",
+        "agentServerNm": "CCE3",
+        "profileNm": "2025년_점검(신규)",
+        "regulationNm": "LG유플러스-기준항목(신규)",
+        "guidelineCd": "ALT-203",
+        "createdTime": "2025-04-07 17:08:27",
         "atemplateNo": "151",
-        "itemCode": "U5110",
-        "guidelineNm": "불필요한 계정 제거",
-        "subjectType": "OS",
-        "subjectSubType": "AIX,HP-UX,Linux,Solaris",
-        "severity": "4",
+        "itemCode": "ALT1203",
+        "guidelineNm": "SYSDBA 원격 접속 제한",
+        "subjectType": "DB",
+        "subjectSubType": "Altibase",
+        "severity": "5",
         "result": "FAIL",
         "resultNm": "취약",
         "stateCd": "",
@@ -1738,6 +1757,8 @@ filters:
   "_server_message_": { "text": "", "type": "200" }
 }
 ```
+
+> 실제 응답에는 위 예시 외에도 동일 `asstCode`(`SSRCCE3-000747`, `SSRCCE3-000492`)에 대해 `guidelineCd: ALT-203`(SYSDBA 원격 접속 제한), `ALT-E5.1`(보안 패치 적용), `ALT-5.1`(보안 패치 적용) 등 여러 취약 항목이 `scanRsltCodeList[]` 배열에 함께 반환됨(2026-07-10 캡처 기준 총 6건). `mgmtOrgId`는 항목에 따라 값이 채워지는 경우(`org_000979`, `org_000947`)와 빈 문자열인 경우가 혼재함.
 
 > **실제 curl 테스트로 확인**: `asstMCtgrNm` 다음에 오던 `asstSCtgrNm`은 값이 없을 경우 응답에서 필드 자체가 생략될 수 있음(위 예시에는 미포함). `profileIfKey`/`guidelineIfKey` 값은 문서상 서로 뒤바뀌어 있었던 것을 실제 캡처 기준(profileIfKey: 644, guidelineIfKey: 27741)으로 수정함. `atemplateNo`는 요청 파라미터 값을 따라 실제로는 "151"로 반환됨. `stateCd`, `dgnosResult`, `dgnosResultNm`, `expectDt`, `changeReason`, `changeReasonNm`, `detail`은 값이 없는 경우 빈 문자열("")로 반환됨을 확인.
 
@@ -2099,11 +2120,11 @@ filters:
 - `vulnerabilityInfo.guidelineCdInfo`(IF-API-099504): 요청 파라미터는 `guidelineCd=DBM-001`(aresultNo=269953, guidelineIfKey=81438, itemCode=MAR6103_001, agentServerNm=CCE3)이나 응답 본문 실제 데이터는 `guidelineCd: U-103`(계정관리/OS/AIX,HP-UX,Linux,Solaris/불필요한 계정 제거) 건으로, `criteria`/`analysisInfo`(`/etc/passwd` 전체 목록 포함)/`measure`/`measureDetailOrigin`(`exclude_check_os`/`check_service`/`check_conffile_contents`/`enable`/`not_applicable_*`/`alternate_*` 옵션 포함) 전체 원문을 사용자 제공 캡처로 확정 반영함.
 - `dashboardInfo.asstVulStateByGdln`(IF-API-097908): 실제 curl 테스트 응답의 `asstStatusList` 46건 전체(U-101~U-701 계열 항목별 severity/totalCnt/vulCnt/actionRate)를 사용자 제공 JSON으로 확정 반영함.
 - `vulnerabilityInfo.guidelineCdList`(4.6, ID 미부여): 실제 응답 `guidelineList`는 총 6건(POS-101~POS-203)이며 문서에는 대표 3건만 수록. 요청 파라미터 `guidelineCd`(APA-202)와 실제 응답 데이터(POS 계열)가 무관함을 확인, 4.5와 동일하게 `resultId` 기준으로 해당 진단결과의 항목 상세 목록 전체를 반환하는 동작으로 확정. 필드 순서(`severity`가 `subjectSubType`보다 선행)와 텍스트 필드 원문을 실제 캡처로 갱신함.
+- **`vulnerabilityInfo.scanResultCodeMngtDetail`(IF-API-099501) endpoint 최종 확정(2026-07-10)**: 요청 URL이 `https://ivms.lguplus.co.kr/ivms/api/scanResultCodeMngtDetail`로 정확히 캡처된 curl 및 응답(`scanRsltCodeList[]`, 6건, `asstCode: SSRCCE3-000747`/`SSRCCE3-000492` 대상)을 확보해 endpoint가 `/scanResultCodeMngtDetail`임을 최초로 명확히 검증함. 이전에 두 차례 제공된 "검증용" curl은 실제로는 모두 `/ivms/api/mngtListDetail`을 호출한 것으로 확인되어 혼선이 있었음(사용자의 curl 복사 실수로 확인됨). 4.2절 요청/응답 예시를 이번 실제 캡처로 갱신함.
 
 ### 사용자 확인이 필요한 미해결 항목 (추측으로 채우지 않고 명시적으로 남김)
 
-1. **`vulnerabilityInfo.scanResultCodeMngtDetail`(IF-API-099501) endpoint 확정**: `/scanResultCodeMngtDetail`로 확정(사용자 확인 완료). 서브 리소스 목록표와 다르게 캡처된 `/ivms/api/mngtListDetail` 표기는 오기로 판단, 반영하지 않음.
-2. **`vulnerabilityInfo.guidelineCdList`(4.6, ID 미부여)**: 해당 오퍼레이션 전용 `api_test` 캡처는 없음(사용자 확인 완료). 스펙 정의표 원본 내용만 유지하고 IF-API-ID는 부여하지 않음.
+1. **`vulnerabilityInfo.guidelineCdList`(4.6, ID 미부여)**: 해당 오퍼레이션 전용 `api_test` 캡처는 없음(사용자 확인 완료). 스펙 정의표 원본 내용만 유지하고 IF-API-ID는 부여하지 않음.
 3. `assetInfo.mngtListDetail`의 `filter/xorStr` 하위 필드 설명(전체관리자산/정상연동/수동등록/점검미수행/미응답 각각의 종합·양호·취약 필터 조합)은 사용자 제공 텍스트로 정확히 반영함.
 4. `assetInfo.asstChrgInfo` 응답 필드 중 `chrgNm`의 필수 여부 표기가 캡처상 불명확하여 "Y?"로 표기함.
 5. `assetInfo.mngtListDetail` 응답 필드 중 `resultId`는 캡처에서 하이라이트(주황색) 표시만 되어 있고 별도 설명 텍스트가 없어 원본 그대로 반영함.
