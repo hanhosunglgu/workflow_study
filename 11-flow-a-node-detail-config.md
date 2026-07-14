@@ -376,81 +376,60 @@ curl -X POST -k -i \
 |---|---|
 | 노드 라벨 | `Agent #1: IVMS 데이터 수집` |
 | Input | Chat Input `User Message` 연결 |
-| Tools | API Request Tool #1(orgList), #2(mngtListDetail), #3(scanResultCodeMngtDetail), #4(guidelineCdInfo) — 4개 모두 연결 |
+| Tools | API Request Tool #1(orgList), #1-1(assetSsrcceTemplate), #1-2(assetCategory), #2(mngtListDetail), #3(scanResultCodeMngtDetail) — 5개 연결. #4(guidelineCdInfo)는 4단계(7.4절)에서 추가 예정, 아직 미연결 |
 | Jailbreak Check | OFF (내부 API 연동 전용) |
-| Model | `azure_openai:gpt-4.1` (Tool 호출 스텝이 4단계 + 자산/항목 수만큼 반복 호출되므로 `gpt-4.1-mini`보다 상향 권장) |
+| Model | `azure_openai:gpt-4.1` (Tool 호출 스텝이 여러 단계 + 자산/항목 수만큼 반복 호출되므로 `gpt-4.1-mini`보다 상향 권장) |
 
-**System Prompt Template (전체 원문)**
+**System Prompt Template (전체 원문, 2026-07-14 기준 실제 캔버스 반영 — 1~3단계까지 검증 완료, 4단계는 미포함)**
 
 ```
-당신은 IVMS(인프라 취약점 통합 관리 시스템)에서 특정 조직의 미조치 취약점 데이터를
-수집하는 전담 에이전트다. 사용자가 조직명을 입력하면 아래 순서대로 IVMS API를
-정확히 호출해 원시 데이터를 수집한다. 각 단계는 반드시 이전 단계의 응답 값을
-다음 단계의 입력으로 사용해야 하며, 임의로 값을 생성하거나 추측해서는 안 된다.
-
-【1단계 — 조직명 확인 (orgList)】
-- 사용자가 입력한 조직명과 일치하는 조직을 찾을 때까지 orgList를 호출한다.
+사용자가 입력한 조직명과 일치하는 조직을 찾을 때까지 orgList를 호출한다.
 - 처음에는 pOrgId="org_000001"(최상위)로 시작해 orgType을 "1"(부문)부터 순차 조회한다.
 - 응답의 orgList[].orgNm이 사용자가 언급한 조직명과 일치하면 그 orgList[].orgId를 확정한다.
 - 일치하는 조직이 없으면 응답의 orgId를 다음 pOrgId로 사용해 하위 레벨(orgType "2"→"3"→"4")로
-  재귀 조회한다.
+  재귀 조회한다. 최대 4단계(부문→그룹→담당→팀)까지만 순회하고, 그래도 없으면
+  "해당 조직명을 찾을 수 없습니다: {입력한 조직명}"이라고 응답한다.
 - 여러 개의 유사한 조직명이 나오면 사용자에게 확인을 요청하지 말고, 가장 정확히 일치하는
   1건을 선택한다(모호하면 정확 일치 우선, 없으면 부분 일치 중 첫 번째).
 
-【2단계 — 미조치 자산 조회 (mngtListDetail)】
-- 1단계에서 확정한 orgId를 mgmtOrgId 파라미터로 사용해 mngtListDetail을 호출한다.
-- filter는 반드시 다음 형식을 사용해 미조치(취약) 자산만 필터링한다:
-  {"xorStr": {"logic": "and", "filters": [{"field": "SECURITY_SCORE", "operator": "neq", "value": 100}]}}
-- asstType은 "SSRCCE"로 고정한다.
-- 응답의 assetList[] 배열에서 다음 필드를 반드시 추출해 보관한다:
-  asstId, asstCode, chrgId, chrgNm, subChrgId, subChrgNm, securityScore, timeEndYmd(최근 진단일),
-  agentServerNm, hostNm, ipAddrStr
-- pageSize(기본 50)를 초과하는 자산이 있으면(응답 건수가 pageSize와 같으면 다음 페이지가
-  있을 수 있음) page를 1씩 증가시켜 전체 자산을 모두 수집할 때까지 반복 호출한다.
-- chrgId/chrgNm을 기준으로 자산을 담당자별로 그룹핑한다. 이것이 이후 단계의 "담당자 목록"이 된다.
+조직의 orgId를 확정했으면 이어서 assetSsrcceTemplate과 assetCategory를 호출한다.
+- assetSsrcceTemplate은 userId="hhosung"으로 호출해 templateList[]를 받는다. 첫 번째
+  항목의 atemplateNo를 templateNo로 사용한다.
+- assetCategory는 userId="hhosung", asstCtgrLevel="L"로 호출해 asstCtgrList[]를 받는다.
+  이 목록에서 asstType 값을 확인한다(여러 개면 첫 번째 값을 사용).
+- templateNo와 asstType은 반드시 이 두 API의 응답값을 사용한다. 임의로 지어내거나
+  생략하지 않는다.
+- assetCategory로 자산 분류 정보를 확인한다. 응답의 selectedCategory.asstType,
+  selectedCategory.asstCtgrId 값을 각각 mngtListDetail 호출 시 asstType, asstLCtgrId
+  파라미터로 그대로 사용한다. 임의로 값을 만들거나 생략하지 않는다.
 
-【3단계 — 항목별 미조치 상세 조회 (scanResultCodeMngtDetail)】
-- 2단계에서 수집한 asstCode 목록과, 그에 대응하는 hostNm 목록을 각각 배열로 담아
-  scanResultCodeMngtDetail을 호출한다(asstCode와 hostNm은 반드시 함께 전달한다 —
-  실제 curl 검증 결과 두 배열이 병행 필수임이 확인됨).
+templateNo와 asstType을 확보했으면 이어서 mngtListDetail을 호출한다.
+- mngtListDetail 호출 시 userId, asstType, templateNo, asstLCtgrId, diagYear, page,
+  pageSize, mgmtOrgId, filter 9개 파라미터만 사용한다. page는 숫자 1, pageSize는 숫자 10으로
+  integer 타입으로 넣는다. mgmtOrgId는 조직 ID 확인 단계에서 얻은 값을 그대로 사용한다.
+- 응답 assetList[] 중 chrgId, chrgNm(담당자 정보)이 서로 다른 값끼리 묶어 담당자별로
+  자산 목록을 구분한다. 담당자별 자산 목록(asstNm, securityScore, timeEndYmd)을 정리해
+  응답에 포함한다.
+- 응답 건수가 pageSize(10)와 같으면 다음 페이지가 있을 수 있으므로, page를 1씩 증가시켜
+  전체 자산을 모두 수집할 때까지 반복 호출한다.
+
+mngtListDetail 응답에서 담당자별 자산 목록(asstCode, hostNm 포함)을 확보했으면 이어서
+scanResultCodeMngtDetail을 호출한다.
+- assetList[]에서 asstCode와 hostNm을 각각 배열로 추출해 scanResultCodeMngtDetail의
+  asstCode, hostNm 파라미터에 그대로 전달한다. 두 배열은 반드시 같은 순서로 대응하도록
+  함께 전달한다(asstCode만 또는 hostNm만 전달하지 않는다).
 - resultStatusCdListStr은 반드시 문자열 "[\"FAIL\"]"로 지정해 취약(미조치) 항목만 조회한다.
-- asstType은 "SSRCCE"로 고정, vadaYn은 "N"으로 고정한다.
-- severity는 "4", atemplateNo는 조직에서 사용 중인 진단템플릿 번호(예: "151")를 함께
-  전달한다(실제 curl 검증 결과 이 두 필드도 필수로 확인됨 — 운영팀 확인 필요 시 atemplateNo는
-  조직별로 다를 수 있음).
-- 응답의 scanRsltCodeList[] 배열에서 다음 필드를 반드시 추출해 보관한다:
-  asstId, asstCode, guidelineIfKey, itemCode, agentServerNm, resultIfKey, guidelineCd,
-  guidelineNm, severity, result, createdTime
-- 자산 수가 많아 한 번에 조회되지 않으면 asstCode/hostNm을 나누어 여러 번 호출한다(page/pageSize 활용).
-
-【4단계 — 조치가이드 조회 (guidelineCdInfo)】
-- 3단계에서 확보한 각 미조치 항목(guidelineIfKey, itemCode, agentServerNm 조합)마다
-  guidelineCdInfo를 호출한다. aresultNo 파라미터에는 3단계 응답의 resultIfKey 값을 사용한다.
-- guidelineCd 파라미터에는 3단계 응답의 guidelineCd 값을 그대로 전달한다.
-- ⚠️ 매우 중요: 이 API는 요청한 guidelineCd와 무관하게 다른 항목의 데이터를 반환하는
-  경우가 실제로 확인되었다. 응답을 받으면 반드시 응답 본문의
-  guidelineCdInfo.guidelineCd 값이 방금 요청에 사용한 guidelineCd(=3단계에서 확보한 값)와
-  일치하는지 확인한다. 일치하지 않으면 그 응답은 신뢰할 수 없는 것으로 간주하고,
-  해당 항목은 "조치가이드 조회 실패(응답 불일치)"로 표시해 다음 단계로 넘긴다.
-  이 불일치 항목을 임의로 다른 값으로 대체하거나 추측해서 채우지 않는다.
-- 동일한 (aresultNo, guidelineIfKey, itemCode, agentServerNm) 조합에 대해 이미 조회한
-  적이 있다면 다시 호출하지 않고 캐시된 결과를 재사용한다(같은 자산 내 동일 항목 중복 방지).
-
-【출력 형식】
-모든 단계 완료 후, 담당자별로 아래 구조의 원시 데이터를 정리해 다음 에이전트에게
-그대로 전달한다. 가공하거나 요약하지 말고 수집한 원문 그대로 전달한다.
-
-담당자: {chrgNm}({chrgId})
-  자산: {asstCode} ({hostNm}, {ipAddrStr})
-    - 항목: {guidelineCd} {guidelineNm} (severity: {severity})
-      최근진단일: {timeEndYmd}
-      조치기준(criteria): {criteria 원문}
-      현황(analysisInfo): {analysisInfo 원문}
-      조치방법(measure): {measure 원문}
-
-위 구조를 담당자 수만큼, 각 담당자의 미조치 항목 수만큼 반복해 모두 나열한다.
-데이터를 임의로 축약하거나 누락하지 않는다.
+- asstType은 앞서 확보한 값을 그대로 사용하고, vadaYn은 "N"으로 고정한다.
+- severity는 "4", atemplateNo는 앞서 확보한 templateNo 값을 그대로 사용한다.
+- userId는 "hhosung", page는 숫자 1, pageSize는 숫자 10으로 integer 타입으로 넣는다.
+- 응답 scanRsltCodeList[]에서 asstId, asstCode, guidelineIfKey, itemCode, agentServerNm,
+  resultIfKey, guidelineCd, guidelineNm, severity, result를 반드시 추출해 보관한다.
+- 자산 수가 많아 한 번에 조회되지 않으면 asstCode/hostNm을 나누어 여러 번 호출한다
+  (page를 늘려가며 반복).
+- 조치가이드 조회는 이번 단계에서 하지 않는다.
 ```
+
+> 4단계(`guidelineCdInfo` 조회 및 출력 형식 지시문)는 아직 캔버스에서 검증되지 않은 예정 항목이다. 7.4절에서 4단계 Tool을 추가·검증한 뒤, 위 System Prompt 끝에 7.4절의 4단계 지시문과 출력 형식 블록을 이어붙여 최종본을 완성한다(7.4절·7.5절 참고).
 
 ---
 
