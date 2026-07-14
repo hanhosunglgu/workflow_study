@@ -880,3 +880,264 @@ templateNo와 asstType을 확보했으면 이어서 mngtListDetail을 호출한�
 5. 검증되면 3단계(`scanResultCodeMngtDetail` 추가)로 넘어간다.
 
 ---
+
+### 7.3 [3단계] `scanResultCodeMngtDetail` Tool 추가
+
+**목표**: 2단계에서 확보한 미조치 자산 목록(`asstCode`, `hostNm`)을 이어받아, 자산별 항목별 취약점 상세(`scanRsltCodeList[]`)를 조회한다. 이 응답에서 다음 단계(`guidelineCdInfo`)가 필요로 하는 4개 키(`guidelineIfKey`, `itemCode`, `agentServerNm`, `resultIfKey`)를 확보하는 것이 이번 단계의 핵심이다.
+
+**추가로 배치할 노드 (Tool 1개)**
+
+| 노드 | 라벨 |
+|---|---|
+| API Request Tool | `API Request Tool: scanResultCodeMngtDetail` |
+
+**추가 연결 (1개)**
+
+| 순서 | From | To | 비고 |
+|---|---|---|---|
+| 7 | API Request Tool(`scanResultCodeMngtDetail`) → `Tool` | Agent #1 → `Tools` | 빨간, 2단계까지의 연결(`orgList`/`assetSsrcceTemplate`/`assetCategory`/`mngtListDetail`)과 같은 Tools 포트에 추가 |
+
+1~2단계의 연결(Chat Input→Agent #1, Agent #1→Chat Output)은 그대로 유지한다.
+
+**API Request Tool 배치 — `scanResultCodeMngtDetail`**
+
+2-4절(216~318행) 기준. `mngtListDetail`과 동일하게 **POST + Body** 방식이며, 2026-07-14에 확인된 Query Params/Read Timeout 설정을 처음부터 반영한다.
+
+| 항목 | 값 |
+|---|---|
+| 노드 라벨 | `API Request Tool: scanResultCodeMngtDetail` |
+| Tool Mode | ON |
+| URL | `https://ivms.lguplus.co.kr/ivms/api/scanResultCodeMngtDetail` |
+| Method | **POST** (⚠️ GET으로 잘못 설정하면 HTTP 405 발생 — `mngtListDetail`과 동일한 함정) |
+| Connect Timeout / Read Timeout | 1000ms / **30000ms** (⚠️ `mngtListDetail`과 동일하게 응답에 시간이 걸릴 수 있으므로 처음부터 30000ms로 설정 — 2026-07-14 확인된 원인 재발 방지) |
+| Query Params | **반드시 비워둘 것(전부 삭제)** — POST+Body 방식이므로 Query Params에 값이 남아있으면 요청 실패(2026-07-14 `mngtListDetail`에서 확인된 것과 동일한 함정이므로 처음부터 비워서 구성) |
+| Header | 공통 인증 헤더 4종 + `Content-Type: application/json`(POST 요청이므로 필수) |
+| 요청 본문 스키마(Body) | `userId`(string), `asstCode`(array of string), `hostNm`(array of string), `resultStatusCdListStr`(string, JSON 배열 직렬화), `vadaYn`(string), `severity`(string), `asstType`(string), `atemplateNo`(string), `page`(integer), `pageSize`(integer) — 아래 JSON Schema 참고 |
+| 툴 설명 | `자산 코드(asstCode)·호스트명(hostNm) 목록 기준으로 취약점 항목별 상세 진단 결과를 조회하는 도구. resultStatusCdListStr에 ["FAIL"]을 지정하면 취약(미조치) 항목만 반환된다. 이 응답의 guidelineIfKey/itemCode/agentServerNm/resultIfKey 값이 있어야 다음 단계의 조치가이드(guidelineCdInfo)를 조회할 수 있다.` |
+
+**"요청 본문 스키마" 입력 방법 (캔버스 UI)**
+
+`mngtListDetail`과 동일하게 우측 상단 "편집" 버튼으로 아래 JSON을 그대로 입력한다.
+
+```json
+{
+  "title": "scanResultCodeMngtDetailRequest",
+  "type": "object",
+  "properties": {
+    "userId": { "type": "string", "description": "요청 사용자 ID (예: admin)" },
+    "asstCode": { "type": "array", "items": { "type": "string" }, "description": "2단계 mngtListDetail 응답의 assetList[].asstCode 목록" },
+    "hostNm": { "type": "array", "items": { "type": "string" }, "description": "asstCode와 병행 전달되는 호스트명 목록(2단계 응답의 assetList[].hostNm)" },
+    "resultStatusCdListStr": { "type": "string", "description": "점검결과 필터, JSON 배열을 문자열로 직렬화. 미조치만 조회 시 [\"FAIL\"]" },
+    "vadaYn": { "type": "string", "description": "자산타입 VADA 여부, 기본 N" },
+    "severity": { "type": "string", "description": "취약도 필터 (예: 4)" },
+    "asstType": { "type": "string", "description": "자산타입 (2단계 assetCategory 응답과 동일 값)" },
+    "atemplateNo": { "type": "string", "description": "진단템플릿 번호 (2단계 assetSsrcceTemplate 응답과 동일 값)" },
+    "page": { "type": "integer", "description": "현재 페이지, 기본 1" },
+    "pageSize": { "type": "integer", "description": "페이지당 항목 수, 기본 50" }
+  },
+  "additionalProperties": true,
+  "strict": false
+}
+```
+
+**Agent #1 System Prompt (3단계 전용 — 1~2단계 위에 이어붙임)**
+
+1~2단계 프롬프트(7.1~7.2절)는 그대로 두고, 그 아래에 항목별 상세 조회 지시를 추가한다.
+
+```
+2단계에서 확보한 미조치 자산 목록의 asstCode와 hostNm을 각각 배열로 담아 scanResultCodeMngtDetail을 호출한다.
+
+- asstCode와 hostNm은 반드시 함께(같은 순서로 대응하도록) 전달한다.
+- resultStatusCdListStr은 반드시 문자열 "[\"FAIL\"]"로 지정해 취약(미조치) 항목만 조회한다.
+- asstType은 2단계에서 확보한 값을 그대로 사용하고, vadaYn은 "N"으로 고정한다.
+- severity는 "4", atemplateNo는 2단계에서 확보한 templateNo 값을 그대로 사용한다.
+- 응답 scanRsltCodeList[]에서 asstId, asstCode, guidelineIfKey, itemCode, agentServerNm, resultIfKey, guidelineCd, guidelineNm, severity, result를 반드시 추출해 보관한다.
+- 자산 수가 많아 한 번에 조회되지 않으면 asstCode/hostNm을 나누어 여러 번 호출한다(page/pageSize 활용).
+- 조치가이드 조회는 이번 단계에서 하지 않는다.
+```
+
+- `Jailbreak Check`: OFF
+- `Model`: `azure_openai:gpt-4.1`(Tool 호출 스텝이 6단계로 늘어나고 자산 수만큼 반복 호출이 필요하므로 `gpt-4.1-mini`보다 상향 권장 — 08번/2-6절 기준과 동일)
+
+**Chat Output**
+- 연결 변경 없음(1~2단계와 동일하게 Agent #1 `Response`를 그대로 수신)
+
+**3단계 검증 방법**
+
+1. Chat Input에 `"서비스인프라팀 미조치 취약점 상세 확인해줘"` 입력 후 전체 플로우 실행
+2. 기대 응답: 담당자별 자산 목록에 더해, 각 자산의 취약 항목(`guidelineCd`/`guidelineNm`/`severity`)까지 포함된 응답이 나타나는지 확인
+3. 정상 동작하지 않으면 다음을 순서대로 점검:
+   - `scanResultCodeMngtDetail` Tool의 Method가 정확히 **POST**로 설정되어 있는지(GET으로 남아있으면 HTTP 405 발생)
+   - `scanResultCodeMngtDetail` Tool의 **Query Params가 완전히 비어있는지**(값이 남아있으면 요청 실패 — `mngtListDetail`과 동일한 함정)
+   - `scanResultCodeMngtDetail` Tool의 **Read Timeout이 30000ms로 설정되어 있는지**
+   - Header에 `Content-Type: application/json`이 추가됐는지
+   - Body에 `asstCode`와 `hostNm`이 반드시 함께(배열로) 전달되는지(둘 중 하나만 전달하면 실패 가능)
+   - `asstType`, `atemplateNo`가 2단계에서 확보한 값과 동일하게 전달되는지(값이 다르면 빈 목록이 반환될 수 있음)
+   - `resultStatusCdListStr`이 문자열로 직렬화된 형태(`"[\"FAIL\"]"`)로 전달되는지(배열 그대로 넣으면 서버가 인식하지 못할 수 있음)
+4. **정상 성공 시에도 나타날 수 있는 경고(에러 아님)**: 2단계와 마찬가지로 `mgmtOrgId` 관련 WARN이 함께 나올 수 있으며 이는 데이터 정합성 경고로 플로우 진행에 영향 없다.
+5. 검증되면 4단계(`guidelineCdInfo` 추가)로 넘어간다.
+
+---
+
+### 7.4 [4단계] `guidelineCdInfo` Tool 추가
+
+**목표**: 3단계에서 확보한 4개 키(`resultIfKey`→`aresultNo`, `guidelineIfKey`, `itemCode`, `agentServerNm`)로 각 미조치 항목의 조치방법(`measure`) 원문을 조회한다. 이 단계까지 완료하면 Agent #1의 4단계 API 체이닝(2절 기준)이 전부 갖춰진다.
+
+**추가로 배치할 노드 (Tool 1개)**
+
+| 노드 | 라벨 |
+|---|---|
+| API Request Tool | `API Request Tool: guidelineCdInfo` |
+
+**추가 연결 (1개)**
+
+| 순서 | From | To | 비고 |
+|---|---|---|---|
+| 8 | API Request Tool(`guidelineCdInfo`) → `Tool` | Agent #1 → `Tools` | 빨간, 1~3단계까지의 연결과 같은 Tools 포트에 추가 |
+
+1~3단계의 연결(Chat Input→Agent #1, Agent #1→Chat Output)은 그대로 유지한다.
+
+**API Request Tool 배치 — `guidelineCdInfo`**
+
+2-5절(322~369행) 기준. 이 Tool은 **GET + Query Params** 방식으로, 앞의 두 POST Tool(`mngtListDetail`/`scanResultCodeMngtDetail`)과 파라미터 위치가 다르다는 점에 주의한다.
+
+| 항목 | 값 |
+|---|---|
+| 노드 라벨 | `API Request Tool: guidelineCdInfo` |
+| Tool Mode | ON |
+| URL | `https://ivms.lguplus.co.kr/ivms/api/guidelineCdInfo` |
+| Method | GET |
+| Connect Timeout / Read Timeout | 3000ms / 10000ms (GET 계열이므로 1절 공통 설정 기준 기본값 사용 — POST+Body 계열처럼 30000ms로 늘릴 필요 없음) |
+| Query Params | `aresultNo`(integer, Y), `guidelineIfKey`(integer, Y), `guidelineCd`(string, Y), `itemCode`(string, Y), `agentServerNm`(string, Y) — 2-5절 표 그대로 |
+| Header | 공통 인증 헤더 4종(GET이므로 `Content-Type` 불필요) |
+| 툴 설명 | `취약점 항목의 상세 조치가이드(진단기준/현황/조치방법)를 조회하는 도구. aresultNo, guidelineIfKey, itemCode, agentServerNm 4개 값이 모두 있어야 정확한 항목이 조회된다. 이 4개 값은 scanResultCodeMngtDetail 응답에서 얻는다(aresultNo는 resultIfKey 값을 사용). 주의: 응답이 요청한 guidelineCd와 무관하게 다른 항목을 반환하는 경우가 있으므로, 응답의 guidelineCd가 원래 요청한 항목과 일치하는지 반드시 재확인해야 한다.` |
+
+> ⚠️ **2-5절 369행의 중대 이슈 재확인**: 요청 시 `guidelineCd`를 지정해도 응답이 그 코드로 필터링되지 않고 `aresultNo`+`guidelineIfKey`+`itemCode`+`agentServerNm` 조합으로 응답이 결정되는 것으로 실제 curl 테스트에서 확정됐다. 아래 System Prompt에 응답 불일치 방어 지시를 반드시 포함해야 한다.
+
+**Agent #1 System Prompt (4단계 전용 — 1~3단계 위에 이어붙임, 2절 최종본과 동일)**
+
+1~3단계 프롬프트(7.1~7.3절)는 그대로 두고, 그 아래에 조치가이드 조회 지시를 추가한다.
+
+```
+3단계에서 확보한 각 미조치 항목(guidelineIfKey, itemCode, agentServerNm 조합)마다 guidelineCdInfo를 호출한다.
+
+- aresultNo 파라미터에는 3단계 응답의 resultIfKey 값을 사용한다.
+- guidelineCd 파라미터에는 3단계 응답의 guidelineCd 값을 그대로 전달한다.
+- ⚠️ 매우 중요: 이 API는 요청한 guidelineCd와 무관하게 다른 항목의 데이터를 반환하는 경우가 실제로 확인되었다. 응답을 받으면 반드시 응답 본문의 guidelineCdInfo.guidelineCd 값이 방금 요청에 사용한 guidelineCd(=3단계에서 확보한 값)와 일치하는지 확인한다. 일치하지 않으면 그 응답은 신뢰할 수 없는 것으로 간주하고, 해당 항목은 "조치가이드 조회 실패(응답 불일치)"로 표시해 다음 단계로 넘긴다. 이 불일치 항목을 임의로 다른 값으로 대체하거나 추측해서 채우지 않는다.
+- 동일한 (aresultNo, guidelineIfKey, itemCode, agentServerNm) 조합에 대해 이미 조회한 적이 있다면 다시 호출하지 않고 캐시된 결과를 재사용한다(같은 자산 내 동일 항목 중복 방지).
+
+모든 단계 완료 후, 담당자별로 아래 구조의 원시 데이터를 정리해 응답에 포함한다. 가공하거나 요약하지 말고 수집한 원문 그대로 전달한다.
+
+담당자: {chrgNm}({chrgId})
+  자산: {asstCode} ({hostNm}, {ipAddrStr})
+    - 항목: {guidelineCd} {guidelineNm} (severity: {severity})
+      최근진단일: {timeEndYmd}
+      조치기준(criteria): {criteria 원문}
+      현황(analysisInfo): {analysisInfo 원문}
+      조치방법(measure): {measure 원문}
+
+위 구조를 담당자 수만큼, 각 담당자의 미조치 항목 수만큼 반복해 모두 나열한다. 데이터를 임의로 축약하거나 누락하지 않는다.
+```
+
+- `Jailbreak Check`: OFF
+- `Model`: `azure_openai:gpt-4.1`(2-6절과 동일 — Tool 호출 스텝이 4종 API + 자산/항목 수만큼 반복되므로 유지)
+
+**Chat Output**
+- 연결 변경 없음(1~3단계와 동일하게 Agent #1 `Response`를 그대로 수신). 이 시점에서 Agent #1의 Tools 구성(4개)과 System Prompt(4단계 전체)는 2-6절의 최종본과 동일해진다.
+
+**4단계 검증 방법**
+
+1. Chat Input에 `"서비스인프라팀 미조치 현황 및 조치가이드 확인해줘"` 입력 후 전체 플로우 실행
+2. 기대 응답: 담당자별 자산·취약 항목마다 `criteria`(진단기준)/`analysisInfo`(현황)/`measure`(조치방법) 원문이 포함된 응답이 나타나는지 확인
+3. 정상 동작하지 않으면 다음을 순서대로 점검:
+   - `guidelineCdInfo` Query Params에 5개 필드(`aresultNo`, `guidelineIfKey`, `guidelineCd`, `itemCode`, `agentServerNm`)가 모두 등록되어 있는지(POST Tool과 달리 이 Tool은 Query Params를 비우면 안 됨 — GET 방식이므로 파라미터가 여기 들어가야 함)
+   - `aresultNo`에 `resultIfKey` 값이 들어가는지(필드명이 다르다는 점에서 혼동하기 쉬움 — Agent가 잘못된 필드를 매핑하지 않는지 System Prompt 재확인)
+   - 응답의 `guidelineCdInfo.guidelineCd`가 요청한 값과 다르게 나오는 경우, System Prompt의 방어 로직(불일치 시 "조회 실패"로 표시)이 실제로 동작하는지(Agent가 불일치를 무시하고 잘못된 데이터를 그대로 쓰지 않는지)
+   - 항목 수가 많아 응답이 느려지면 Read Timeout(GET 계열 10000ms)이 부족한지 확인 — 부족하면 `mngtListDetail`과 동일하게 상향 조정 검토
+4. 검증되면 5단계(Agent #2, Human Approval, Language Model을 끼워 넣어 최종 구조 완성)로 넘어간다.
+
+---
+
+### 7.5 [5단계] Agent #2 · Human Approval · Language Model 삽입 — 최종 구조 완성
+
+**목표**: 1~4단계에서 검증한 Agent #1(IVMS 데이터 수집)의 출력을 Chat Output에 직결하던 임시 연결을 끊고, 그 사이에 Agent #2(압박메시지+조치가이드 생성) → Human Approval → Language Model(패스스루)을 끼워 넣어 2절의 최종 구조(4절 구조도)를 완성한다.
+
+**끊어야 할 연결 (1개)**
+
+| 대상 | 비고 |
+|---|---|
+| Agent #1 `Response` → Chat Output `Input` | 1단계(7.1절)부터 4단계까지 유지해온 임시 연결. 이 연결선을 삭제한다 |
+
+**추가로 배치할 노드 (3개)**
+
+| 노드 | 라벨 |
+|---|---|
+| Agent | `Agent #2: 담당자별 압박메시지+조치가이드 생성` |
+| Human Approval | 기본값 |
+| Language Model | 기본값 |
+
+**추가 연결 (4개, 기존 연결표 3.절 6~9번과 동일)**
+
+| 순서 | From | To | 비고 |
+|---|---|---|---|
+| 6 | Agent #1 → `Response` | Agent #2 → `Input` | 파란 점선 — 방금 끊은 임시 연결 대신 이 연결로 대체 |
+| 7 | Agent #2 → `Response` | Human Approval → `Target Message` | 파란, 필수 포트 |
+| 8 | Human Approval → `Human Approval` | Language Model → `Input` | Chat Output 직결 불가 → 경유 필수(2-9절 543행 근거) |
+| 9 | Language Model → `Response` | Chat Output → `Input` | **Chat Output 쪽에서 드래그 시작**(04번 문서 151행 제약 — 2-10절과 동일 주의) |
+
+**Agent #2 구성**
+
+2-7절(457~508행)의 값을 그대로 사용한다.
+
+| 항목 | 값 |
+|---|---|
+| 노드 라벨 | `Agent #2: 담당자별 압박메시지+조치가이드 생성` |
+| Input | Agent #1 `Response` 연결(위 표 6행) |
+| Tools | 연결 없음 |
+| Jailbreak Check | OFF |
+| Model | `azure_openai:gpt-4.1-mini` |
+| System Prompt | 2-7절 원문 그대로(미조치 판단 및 선별 기준, 담당자별 섹션 출력 구조, 전체 마무리 문구 — 469~508행 전문 참고) |
+
+**Human Approval 구성**
+
+2-8절(512~520행)의 값을 그대로 사용한다.
+
+| 항목 | 값 |
+|---|---|
+| Target Message | Agent #2 `Response` 연결(위 표 7행) |
+| question | `"위 {담당자 수}명분 압박메시지 및 조치가이드를 이 내용 그대로 승인하시겠습니까?"`(고정 문자열 직접 입력 — 노드 연결 아님) |
+| Model | `azure_openai:gpt-4.1-mini` |
+
+> 09번 문서 2절 요구사항에 따라 담당자별 개별 승인이 아닌 전체 통합 승인 1회로 구성한다(2-8절 520행과 동일).
+
+**Language Model 구성 (패스스루)**
+
+2-9절(524~543행)의 값을 그대로 사용한다.
+
+| 항목 | 값 |
+|---|---|
+| Input | Human Approval `Human Approval` 포트 연결(위 표 8행) |
+| Model | `azure_openai:gpt-4.1-mini` |
+| System Prompt | 2-9절 원문 그대로("승인된 경우"/"거절된 경우" 분기 패스스루 지시 — 533~541행 전문 참고) |
+
+> ⚠️ 이 노드는 `04-ixi-enterprise-node-catalog.md` 674/679행 제약(Human Approval 출력 → Chat Output 직접 연결 불가)을 우회하기 위한 필수 경유 노드다(2-9절 543행과 동일 근거).
+
+**Chat Output 최종 연결**
+
+- **Input**: Language Model `Response` 연결(위 표 9행)
+- ⚠️ **연결 방향 주의**: Language Model의 `Response` 포트에서 드래그하면 Chat Output이 목록에 나타나지 않는다(04번 문서 151행). 반드시 **Chat Output 노드의 `Input` 포트 쪽에서 드래그를 시작**해 Language Model을 선택할 것(2-10절과 동일 주의).
+
+**5단계 검증 방법**
+
+1. Chat Input에 `"서비스인프라팀 미조치 현황 압박 및 조치가이드 생성해줘"` 입력 후 전체 플로우 실행
+2. 기대 응답 순서: Agent #1이 원시 데이터 수집 → Agent #2가 담당자별 압박 메시지+조치가이드 요약 생성 → Human Approval이 승인 질문("위 N명분 ... 승인하시겠습니까?")을 띄움
+3. 승인(Yes) 응답 시: Language Model이 "[승인 완료]"를 앞에 붙여 Agent #2의 출력 전체를 그대로 Chat Output에 전달하는지 확인
+4. 거절(No) 응답 시: Language Model이 "[거절됨] 요청하신 내용은 승인되지 않아 발송되지 않습니다."만 출력하고 원본 내용을 다시 출력하지 않는지 확인
+5. 정상 동작하지 않으면 다음을 순서대로 점검:
+   - Agent #1 `Response` → Chat Output `Input` 임시 연결이 실제로 삭제되었는지(삭제하지 않으면 Agent #1 원시 데이터와 최종 응답이 중복 출력되거나 플로우가 꼬일 수 있음)
+   - Human Approval → Language Model → Chat Output 경유 구조가 정확한지(Human Approval을 Chat Output에 직결 시도하면 노드가 목록에 나타나지 않음 — 04번 문서 674/679행 제약)
+   - Chat Output은 반드시 Chat Output 쪽에서 드래그해 Language Model과 연결했는지(반대 방향으로 시도하면 실패)
+   - Agent #2가 "조치가이드 조회 실패(응답 불일치)" 항목을 임의로 다른 값으로 채우지 않고 그대로 "수동 확인 필요"로 표기하는지(2-7절 479~481행 지시 준수 여부)
+6. 검증되면 플로우 A 전체 구성이 완료된 것이며, 6절의 "구성 후 확인 체크리스트"로 최종 점검한다.
+
+---
