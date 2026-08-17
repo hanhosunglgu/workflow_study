@@ -299,7 +299,7 @@
 | asstGroupList[].asstLGroupNm | asstLGroupNm | 자산그룹(대) | string | N | HR_System |
 | asstGroupList[].asstMGroupNm | asstMGroupNm | 자산그룹(중) | string | N | JSP456 |
 | asstGroupList[].asstSGroupNm | asstSGroupNm | 자산그룹(소) | string | N | JSP789 |
-| asstGroupList[].authConcatList | authConcatList | 자산그룹별 권한부여 사용자/부서명 목록 | string | N | 서비스인프라팀, S팀 |
+| asstGroupList[].authConcatList | authConcatList | 자산그룹별 권한부여 사용자/부서명 목록 | string | N | Enterprise SW프로덕트개발팀, S팀 |
 | asstGroupList[].agentServerNm | agentServerNm | 에이전트 서버명 | string | N | CCE1 |
 | asstGroupList[].groupType | groupType | 그룹타입 | integer | N | 3자산그룹유형: 3 |
 | asstGroupList[].hideYn | hideYn | 숨김여부 | string | N | N(기본): 미사용 Y: 사용 |
@@ -408,8 +408,8 @@
 |---|---|---|---|---|---|
 | result | result | 조직목록 결과 정보 | object | Y | |
 | result.orgList | orgList | 조직 목록 | Array[object] | Y | |
-| orgList[].orgId | orgId | 조직ID | string | Y | org_000008 |
-| orgList[].orgNm | orgNm | 조직명 | string | Y | 서비스인프라팀 |
+| orgList[].orgId | orgId | 조직ID | string | Y | org_000991 |
+| orgList[].orgNm | orgNm | 조직명 | string | Y | Enterprise SW프로덕트개발팀 |
 | orgList[].useYn | useYn | 사용여부 | string | Y | Y |
 | orgList[].pOrgId | pOrgId | 상위조직ID | string | Y | org_000001 |
 | orgList[].pAffltId | pAffltId | 계열사코드 | string | Y | org_000001 |
@@ -440,8 +440,8 @@
         "pAffltId": "org_000001"
       },
       {
-        "orgId": "org_000008",
-        "orgNm": "서비스인프라팀",
+        "orgId": "org_000991",
+        "orgNm": "Enterprise SW프로덕트개발팀",
         "useYn": "Y",
         "pOrgId": "org_000001",
         "pAffltId": "org_000001"
@@ -452,7 +452,7 @@
 }
 ```
 
-> 실제 curl 테스트(`cmmCode_공통코드관리/api_test/`) 응답에서 최상위(`pOrgId=org_000001`) 산하 조직 다수(CSEO, CHO, 서비스인프라팀 등)를 확인함.
+> 실제 curl 테스트(`cmmCode_공통코드관리/api_test/`) 응답에서 최상위(`pOrgId=org_000001`) 산하 조직 다수(CSEO, CHO, Enterprise SW프로덕트개발팀 등)를 확인함.
 
 **응답시간(초) 샘플**: 0.014
 
@@ -521,6 +521,8 @@
   "asstLCtgrId": "AT_0005382"
 }
 ```
+
+> ⚠️ **필터 신뢰성 미검증(2026-07-14, ixi-enterprise 캔버스 실행 로그 기반)**: `mgmtOrgId`로 필터링해 조회했음에도 반환된 `assetList[]` 항목 중 `mgmtOrgId` 자체가 빈 값인 레코드, 요청 조직과 그룹 경로가 일치하지 않는 레코드가 확인됨. `chrgId`/`chrgNm`(담당자 정보)도 빈 값으로 반환되는 자산이 존재함. 이는 서버가 `mgmtOrgId` 등 입력 파라미터를 필터 조건으로 엄격히 적용하지 않거나, 해당 파라미터에 값이 없는 자산 레코드가 실제로 존재함을 시사한다. 클라이언트(Agent/Function 노드)는 서버 응답을 무조건 신뢰하지 말고, `mgmtOrgId` 등 핵심 필터 조건으로 응답을 재검증/재필터링해야 하며, `chrgId`/`chrgNm`이 빈 값인 자산은 "담당자 미배정"으로 별도 처리해야 한다. IVMS 운영팀에 `mgmtOrgId` 필터의 실제 적용 여부 확인 필요.
 
 **`filter/xorStr` 상세 조건 (전체관리자산 항목 및 상세조건)**
 
@@ -834,7 +836,7 @@ filters:
 | asstInfo.asstLCtgrNm | asstLCtgrNm | 자산 대분류 명 | string | N | WEB |
 | asstInfo.asstMCtgrNm | asstMCtgrNm | 자산 중분류 명 | string | N | NGINX |
 | asstInfo.asstSCtgrNm | asstSCtgrNm | 자산 소분류 명 | string | N | NGINX |
-| asstInfo.mgmtOrgNm | mgmtOrgNm | 관리 조직명 | string | N | 서비스인프라팀 |
+| asstInfo.mgmtOrgNm | mgmtOrgNm | 관리 조직명 | string | N | Enterprise SW프로덕트개발팀 |
 | asstInfo.assetGroupModelList | assetGroupModelList | 자산 그룹 모델 리스트 | Array[object] | N | |
 | assetGroupModelList[].asstGroupNmPath | asstGroupNmPath | 자산 그룹명 경로 | string | N | HR_System > SCA |
 | assetGroupModelList[].asstGroupIdPath | asstGroupIdPath | 자산 그룹ID 경로 | string | N | GR_0001489,GR_0001518 |
@@ -876,7 +878,7 @@ filters:
       "asstLCtgrNm": "WEB",
       "asstMCtgrNm": "NGINX",
       "asstSCtgrNm": "NGINX",
-      "mgmtOrgNm": "서비스인프라팀",
+      "mgmtOrgNm": "Enterprise SW프로덕트개발팀",
       "assetGroupModelList": [
         { "asstGroupNmPath": "HR_System > SCA", "asstGroupIdPath": "GR_0001489,GR_0001518" }
       ],
@@ -947,18 +949,18 @@ filters:
         "chrgTypeCdNm": "정",
         "chrgId": "macksh",
         "chrgNm": "김상현",
-        "orgId": "org_000008",
-        "orgNm": "서비스인프라팀",
-        "orgIdPath": "org_000001 / org_000008"
+        "orgId": "org_000991",
+        "orgNm": "Enterprise SW프로덕트개발팀",
+        "orgIdPath": "org_000001 / org_000991"
       },
       {
         "chrgTypeCd": "SCHGR",
         "chrgTypeCdNm": "부",
         "chrgId": "yjw",
         "chrgNm": "유정원",
-        "orgId": "org_000008",
-        "orgNm": "서비스인프라팀",
-        "orgIdPath": "org_000001 / org_000008"
+        "orgId": "org_000991",
+        "orgNm": "Enterprise SW프로덕트개발팀",
+        "orgIdPath": "org_000001 / org_000991"
       }
     ]
   },
@@ -966,7 +968,7 @@ filters:
 }
 ```
 
-> **실제 curl 테스트로 확인**: `asstChrgList`는 정담당자(`chrgTypeCd: CHGR`)와 부담당자(`chrgTypeCd: SCHGR`)가 배열로 함께 반환됨을 확인. `orgIdPath`는 조직 계층 깊이에 따라 2단계(`org_000001 / org_000008`)부터 3단계 이상까지 가변적임.
+> **실제 curl 테스트로 확인**: `asstChrgList`는 정담당자(`chrgTypeCd: CHGR`)와 부담당자(`chrgTypeCd: SCHGR`)가 배열로 함께 반환됨을 확인. `orgIdPath`는 조직 계층 깊이에 따라 2단계(`org_000001 / org_000991`)부터 3단계 이상까지 가변적임.
 
 **응답시간(초) 샘플**: 0.01
 
@@ -1651,6 +1653,8 @@ filters:
 
 > **실제 curl 테스트로 확인(2026-07-10, URL `/ivms/api/scanResultCodeMngtDetail`로 정확히 캡처됨)**: `resultStatusCdListStr`은 JSON 배열을 문자열로 직렬화한 값(`"[\"FAIL\"]"`)으로 전달됨. 필드명은 `assetCode`가 아닌 `asstCode`로 확인됨. `page`/`pageSize`도 함께 전달됨이 확인됨.
 
+> ⚠️ **필터 신뢰성 미검증(2026-07-14, ixi-enterprise 캔버스 실행 로그 기반)**: `severity="4"`로 요청했음에도 응답에 `severity="5"` 항목이 포함되는 사례가 확인됨. `severity`가 필수(Y) 입력 파라미터라는 것은 값을 반드시 보내야 한다는 의미일 뿐, 서버가 이를 근거로 응답을 엄격히 필터링해 반환한다는 보장은 아닌 것으로 보인다. 클라이언트(Agent/Function 노드)는 응답 `scanRsltCodeList[]`를 받은 뒤 `severity` 값으로 재검증/재필터링해야 한다. IVMS 운영팀에 `severity` 필터의 실제 적용 여부 확인 필요.
+
 **출력 데이터 (Body)**
 
 | 데이터셋명 | 영문명 | 한글명 | 타입 | 필수 | 설명 |
@@ -2110,7 +2114,7 @@ filters:
 
 - 전체 21개 오퍼레이션 제목에 `IF-API-XXXXXX` 식별자 추가 완료 (cmmCode: 098001~098005, assetInfo: 099401~099404, dashboardInfo: 097901~097908, vulnerabilityInfo: 099501~099504).
 - `cmmCode.codeList`(IF-API-098004): 실제 응답의 `cd` 값 6종(DR, DEV, REVIEW, EDU, OPER, INTG) 확인 및 예시 갱신.
-- `cmmCode.orgList`(IF-API-098005): `pOrgId=org_000001` 산하 조직 다수(CSEO, CHO, 서비스인프라팀 등) 확인 및 예시 갱신.
+- `cmmCode.orgList`(IF-API-098005): `pOrgId=org_000001` 산하 조직 다수(CSEO, CHO, Enterprise SW프로덕트개발팀 등) 확인 및 예시 갱신.
 - `assetInfo.asstChrgInfo`(IF-API-099403): `orgIdPath`가 3단계 계층(`org_000001 / org_001746 / org_001048`)임을 확인 및 예시/설명 갱신.
 - `dashboardInfo.vulStatByAsst`(IF-API-097901): `asstStatusList` 5개 카테고리(전체 관리 자산/정상 연동/수동 등록/점검 미수행/미응답) 실제 수치로 예시 확장.
 - `dashboardInfo.vulCodeRank`(IF-API-097903): SRV-133, SRV-125 항목 추가 확인 및 예시 확장.
