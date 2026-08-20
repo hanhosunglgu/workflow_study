@@ -126,7 +126,11 @@
 | `X-Header-Authorization` | Y | `kzS7dQYRUHWC7sZb1W1Q+4OzPQEwjJ1fGVMehFOEOMjXbk22ntCbdOICw7JP15d5H4fDC4fI73hOiL0SuOgGdW==` | 인증 서명 값(HMAC 등으로 생성된 서명 문자열로 추정, Base64 유사 인코딩). `X-AuthorizationTime`과 페어로 매 요청마다 재계산 필요 — 서명 생성 알고리즘은 IVMS 운영팀 확인 필요 |
 | `Content-Type` | POST만 Y | `application/json` | POST 요청(Body 존재) 시에만 필요 |
 
-> ⚠️ **미확인 사항**: `X-Header-Authorization`의 서명 생성 알고리즘(HMAC-SHA256 등), 서명 대상 문자열 구성 규칙(URL+시각+바디 등), `X-Global-Transaction-ID`의 실제 채번 규칙은 이 캡처만으로는 특정할 수 없다. IVMS 운영팀에 서명 생성 스펙을 별도로 확인해야 실 운영 배포가 가능하다.
+> ⚠️ **미확인 사항**: `X-Header-Authorization`의 서명 생성 알고리즘(HMAC-SHA256 등), 서명 대상 문자열 구성 규칙(URL+시각+바디 등), `X-Global-Transaction-ID`의 실제 채번 규칙은 이 캡처만으로는 특정할 수 없다.
+
+> 🔎 **실제 동작 확인(2026-08-18, ixi-enterprise 캔버스 실행 기준)**: 위 표는 스펙 정의 기준으로 `X-Global-Transaction-ID`/`X-APP-NAME`/`X-AuthorizationTime`/`X-Header-Authorization` 4종을 필수(Y)로 기재하고 있으나, **실제로는 이 4종을 모두 빈 값으로 호출해도 API가 정상 응답값을 반환하는 것이 확인되었다**(`orgList`, `assetSsrcceTemplate`, `assetCategory`, `mngtListDetail`, `scanResultCodeMngtDetail`, `guidelineCdInfo` 등 플로우 A 구성 API 대상). 즉 **서버가 이 헤더들을 실제로 검증하지는 않는 것으로 보인다**.
+>
+> 다만 이것이 "인증이 존재하지 않는다"는 뜻은 아니다. 현재 호출 경로가 네트워크 레벨(사내망/IP 화이트리스트 등)에서 이미 인가된 상태여서 애플리케이션 레벨 검증이 생략된 것일 가능성을 배제할 수 없으며, 이 두 경우는 현재 확인 범위로는 구분되지 않는다. **배포 환경이 바뀌면 인증 요구가 달라질 수 있으므로**, 헤더 키 자체는 빈 값으로라도 유지하고 서명 생성 스펙은 IVMS 운영팀 확인 항목으로 남겨둔다.
 
 ---
 
@@ -1653,6 +1657,20 @@ filters:
 
 > **실제 curl 테스트로 확인(2026-07-10, URL `/ivms/api/scanResultCodeMngtDetail`로 정확히 캡처됨)**: `resultStatusCdListStr`은 JSON 배열을 문자열로 직렬화한 값(`"[\"FAIL\"]"`)으로 전달됨. 필드명은 `assetCode`가 아닌 `asstCode`로 확인됨. `page`/`pageSize`도 함께 전달됨이 확인됨.
 
+> 🔴 **스펙표와 실제 서버 동작 불일치 — 개발기 curl 검증으로 확정(2026-08-18)**: 개발기(`http://165.244.21.49:8080`)에서 파라미터를 1개씩 제거하며 호출한 결과, **스펙표에 선택(N)으로 기재된 아래 2개가 실제로는 필수**임이 확인됐다. 생략 시 `msgCd: E`("필수 컬럼 확인 필요.")로 거부된다.
+>
+> | 파라미터 | 스펙표 표기 | 실제 동작 |
+> |---|---|---|
+> | `resultStatusCdListStr` | N | **필수** — 생략 시 `msgCd: E` |
+> | `vadaYn` | N | **필수** — 생략 시 `msgCd: E` |
+> | `atemplateNo` | N | 선택 맞음 (생략해도 정상 응답) |
+> | `page`/`pageSize` | N | 선택 맞음 (생략해도 정상 응답) |
+> | `asstLCtgrId` | N | 선택 맞음 (`mngtListDetail`과 달리 불필요) |
+>
+> 또한 `pageSize`는 `50`/`100`/`200` 모두 정상 동작해 **값 크기 제한은 없음**이 확인됐다.
+>
+> 🔴 **`asstCode`와 `hostNm`을 함께 보내면 AND 조건으로 결과가 0건이 된다(2026-08-18)**: 동일 검증에서 `asstCode`+`hostNm`을 함께 전달하면 항목 0건, **`hostNm`을 제거하면 8건이 정상 조회**됐다. 두 값이 정확히 대응하지 않으면 교집합이 비기 때문으로 보인다. `asstCode`만으로 자산이 특정되므로 **`hostNm`은 전달하지 않는 것을 권장**한다. (4.2절 상단 요청 예시는 두 값이 정확히 대응하는 캡처라 정상 동작했던 것으로 판단됨)
+
 > ⚠️ **필터 신뢰성 미검증(2026-07-14, ixi-enterprise 캔버스 실행 로그 기반)**: `severity="4"`로 요청했음에도 응답에 `severity="5"` 항목이 포함되는 사례가 확인됨. `severity`가 필수(Y) 입력 파라미터라는 것은 값을 반드시 보내야 한다는 의미일 뿐, 서버가 이를 근거로 응답을 엄격히 필터링해 반환한다는 보장은 아닌 것으로 보인다. 클라이언트(Agent/Function 노드)는 응답 `scanRsltCodeList[]`를 받은 뒤 `severity` 값으로 재검증/재필터링해야 한다. IVMS 운영팀에 `severity` 필터의 실제 적용 여부 확인 필요.
 
 **출력 데이터 (Body)**
@@ -2020,6 +2038,26 @@ filters:
 ```
 
 > `criteria`/`analysisInfo`/`measure`/`measureDetailOrigin` 전체 원문은 사용자가 제공한 캡처 텍스트로 확정 반영함(요청/응답 예시 JSON 전체 그대로). 요청 파라미터(DBM-001)와 응답 데이터(U-103)가 다른 캡처 불일치는 위에 명시함.
+
+> ✅ **개발기 curl 검증 완료(2026-08-18) — 스펙표 정확, "파라미터 무관 응답" 이슈는 재현되지 않음**
+>
+> 개발기(`http://165.244.21.49:8080`)에서 파라미터를 1개씩 제거하며 검증한 결과:
+>
+> **① 필수 5개 표기가 정확하다.** `aresultNo`/`guidelineIfKey`/`guidelineCd`/`itemCode`/`agentServerNm` 중 **어느 하나라도 빠지면 `msgCd: E`**("필수 컬럼 확인 필요")로 거부된다. `mngtListDetail`·`scanResultCodeMngtDetail`과 달리 이 API는 스펙표와 실제 동작이 일치한다.
+>
+> **② `guidelineCd`를 바꾸면 응답도 따라 바뀐다.** 나머지 4개 키를 고정한 채 `guidelineCd`만 변경해 호출한 결과:
+>
+> | 요청 `guidelineCd` | 응답 |
+> |---|---|
+> | `DBM-001` (다른 4개 키와 짝이 맞는 값) | `guidelineCd: "DBM-001"` + 전체 데이터 정상 반환 |
+> | `U-103` (짝이 맞지 않는 값) | **모든 필드가 빈 문자열** |
+> | `U-106` (짝이 맞지 않는 값) | **모든 필드가 빈 문자열** |
+>
+> 즉 서버는 요청 파라미터를 정상적으로 반영하며, 5개 키가 하나의 세트로 일치해야 데이터를 반환한다. 위에 기록된 "요청(DBM-001)과 응답(U-103) 불일치"와 `09-ivms-ixi-integration-requirements-spec.md` 5.3절의 **"파라미터 무관 응답" 이슈는 서로 다른 두 호출의 캡처가 섞인 착오였을 가능성이 높다.**
+>
+> 🔴 **제3의 실패 모드 주의 — "빈 응답"**: 키 세트가 맞지 않으면 `msgCd: E`가 아니라 **HTTP 200 + 모든 필드가 빈 문자열**로 반환된다. 에러가 아니므로 클라이언트(Agent)가 성공으로 오인하기 쉽다. **`measure`가 빈 문자열인지 반드시 확인**하는 방어 로직이 필요하다.
+>
+> 검증 스크립트: `ixi-enterprise/guideline-debug.sh`
 
 **응답시간(초) 샘플**: 0.01
 

@@ -14,10 +14,10 @@
 
 | 파일 | 내용 |
 |------|------|
-| [04-ixi-enterprise-node-catalog.md](../../04-ixi-enterprise-node-catalog.md) | 전체 노드 카탈로그 — 20개 노드 파라미터/포트/용도 상세 (UI 검증 완료) |
+| [04-ixi-enterprise-node-catalog.md](../../04-ixi-enterprise-node-catalog.md) | 전체 노드 카탈로그 — 21개 노드 파라미터/포트/용도 상세 (UI 검증 완료, 2026-08-20 Send Mail Output 추가) |
 | [05-ixi-enterprise-flow_analysis.md](../../05-ixi-enterprise-flow_analysis.md) | ixi-enterprise로 구현한 8개 워크플로우 구성 및 노드 설정 분석 |
 | [06-ixi-enterprise-improvement-review.md](../../06-ixi-enterprise-improvement-review.md) | ixi 워크플로우 n8n 대체 구현 — 노드 매핑, 디버깅·예외처리 한계 비교 |
-| [07-ixi-enterprise-requirements-spec.md](../../07-ixi-enterprise-requirements-spec.md) | ixi-enterprise 개발팀 추가 개발 요구사항 명세서 (18개 REQ) |
+| [07-ixi-enterprise-requirements-spec.md](../../07-ixi-enterprise-requirements-spec.md) | ixi-enterprise 개발팀 추가 개발 요구사항 명세서 (20개 REQ) |
 
 ### 플로우 카탈로그 (이 폴더)
 
@@ -32,6 +32,14 @@
 | [flow-mcp.md](./flow-mcp.md) | 플로우 카테고리 6: MCP 확장 (6-1) |
 | [security-agent-requirements.md](./security-agent-requirements.md) | 보안 통합 Agent 시스템 요구사항 명세 (Mock 서버 포함) |
 
+### 실전 구축 기록 (2026-08-18 추가)
+
+| 파일 | 내용 |
+|------|------|
+| **[ivms-flow-a-build-lessons.md](./ivms-flow-a-build-lessons.md)** | **IVMS 플로우 A 구축 실전 기록** — 개발기 서버 주소, IVMS 스펙표 오류, 컨텍스트 예산 대응, 프롬프트 작성 규칙, 검증된 API 체이닝. **다음 프로젝트 착수 전 필독** |
+
+> 🔴 위 문서의 핵심 3가지: (1) **IVMS 스펙표의 필수 Y/N을 신뢰하지 말 것** — 두 API에서 연달아 불일치 확인, (2) **API 파라미터 문제는 캔버스가 아니라 개발기 curl로 진단할 것** — 캔버스는 요청 Body를 볼 수 없음, (3) **System Prompt에 `{변수}` 중괄호를 쓰지 말 것** — 템플릿 변수로 해석되어 실행이 차단됨
+
 ---
 
 ## 핵심 요약
@@ -39,14 +47,14 @@
 ### ixi-enterprise 노드 카테고리
 
 ```
-I/O          : Chat Input, Chat Output, JSON Output, Template Message
+I/O          : Chat Input, Chat Output, JSON Output, Template Message, Send Mail Output
 AI/LLM       : Language Model, Agent, AI Router, Structured Output
 Tools        : Calculator, Web Search, Youtube, MCP Connection, KOSIS, API Request
 RAG          : KMS Retriever, Document Formatter
 Human Loop   : Human Approval, Human Choice
 Guardrail    : Moderation Guardrail, PLL Guardrail
 ```
-총 20개 노드 (2026-05-18 UI 검증 완료)
+총 21개 노드 (2026-05-18 UI 검증 20개 + 2026-08-20 Send Mail Output 확인)
 
 ### 구현된 워크플로우 8개 (2026-06-02 기준)
 

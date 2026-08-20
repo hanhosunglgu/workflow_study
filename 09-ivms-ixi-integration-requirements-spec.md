@@ -116,6 +116,14 @@ IVMS(인프라 취약점 통합 관리 시스템)는 사내 서버를 스캔하�
 
 ixi-enterprise 노드 카탈로그(`04-ixi-enterprise-node-catalog.md`)상 Slack/이메일/Teams 등 아웃바운드 알림 노드는 존재하지 않는다. 인터뷰 결과 출력은 **채팅 응답까지만**이며 이후 전달은 보안담당자가 수동으로 수행하므로 문제 없음.
 
+> 🔴 **정정(2026-08-20, 실측)**: 위 전제는 사실과 다르다. **`Send Mail Output` 노드가 실재한다**(category=OUTPUT, 필드: `mail_title`/`mail_receiver`/`input`). 본 문서 작성 이후 추가된 것으로 보이며, 04번 노드 카탈로그에도 누락되어 있었다(2026-08-20 반영).
+>
+> 다만 **실사용은 현재 불가능하다.** 5단계 구현 검증 결과, 메일 본문이 평문이고 그 앞에 필수로 경유해야 하는 Language Model이 입력의 줄바꿈을 보존하지 못해 **수십 건의 목록이 한 문단으로 뭉개져 판독 불가**한 상태로 발송된다. 이에 플로우 A 최종 구성에서는 **메일 발송을 제외하고 Chat Output으로 출력**하도록 결정했다.
+>
+> → `07-ixi-enterprise-requirements-spec.md` **REQ-019 / REQ-020** 등록. 두 요구사항이 해결되면 발송 기능을 되살릴 수 있다.
+>
+> 검증 상세: `ixi-enterprise/stage5-test-guide.md` 5.5~5.6절, `ixi-enterprise/docs/ivms-flow-a-build-lessons.md` 5.7절
+
 ### 5.3 `guidelineCdInfo`/`guidelineCdList` 파라미터 무관 응답 이슈
 
 `08-ivms_openapi_spec.md`에 실제 curl 테스트로 확인된 내용에 따르면, 이 두 API는 요청 시 `guidelineCd` 파라미터를 지정해도 응답이 해당 코드로 필터링되지 않고 **`resultId`/`aresultNo`/`guidelineIfKey`/`itemCode`/`agentServerNm` 기준으로 관련된 전체 가이드라인 항목을 반환**하는 것으로 보인다.

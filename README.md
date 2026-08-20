@@ -78,7 +78,7 @@ total_progress = Jira 티켓 완료율 × 40%
 | [04-ixi-enterprise-node-catalog.md](./04-ixi-enterprise-node-catalog.md) | ixi-enterprise 20개 노드 파라미터·포트·제약 상세 (UI 검증 완료) |
 | [05-ixi-enterprise-flow_analysis.md](./05-ixi-enterprise-flow_analysis.md) | ixi-enterprise로 구현한 8개 워크플로우 구성 및 노드 설정 분석 |
 | [06-ixi-enterprise-improvement-review.md](./06-ixi-enterprise-improvement-review.md) | ixi 워크플로우를 n8n으로 대체 구현 시 노드 매핑, 디버깅·예외처리 한계 비교 |
-| [07-ixi-enterprise-requirements-spec.md](./07-ixi-enterprise-requirements-spec.md) | ixi-enterprise 개발팀 추가 개발 요구사항 명세서 (18개 REQ) |
+| [07-ixi-enterprise-requirements-spec.md](./07-ixi-enterprise-requirements-spec.md) | ixi-enterprise 개발팀 추가 개발 요구사항 명세서 (20개 REQ) |
 
 ---
 

@@ -1,0 +1,1977 @@
+{
+  "name": "graph_stage3_scanresult",
+  "role": "사내보안 ivms 연결 테스트",
+  "description": "플로우 A 3단계: #1A -> #1B -> #1B-2 -> #1C(scanResultCodeMngtDetail) -> Chat Output | #1A 하드코딩(기능검증 전용)",
+  "config": {
+    "options": [
+      {
+        "name": "number_of_messages",
+        "type": "INT",
+        "description": "대화에서 기억할 메시지의 개수 (AI 메시지 포함)",
+        "placeholder": null,
+        "required": true,
+        "is_shown": true,
+        "display_name": "메시지 히스토리 길이",
+        "value": 20
+      }
+    ],
+    "version": "v2"
+  },
+  "nodes": [
+    {
+      "id": "b28ce8c2-7c40-43bb-b7d6-d45605f62d24",
+      "metadata": {
+        "outputs": [
+          {
+            "name": "response",
+            "display_name": "Response",
+            "output_types": [
+              "MESSAGE",
+              "AI_MESSAGE"
+            ],
+            "multiple_outputs": true
+          }
+        ],
+        "fields": [
+          {
+            "name": "input",
+            "type": "TEXT",
+            "description": "",
+            "placeholder": "",
+            "required": true,
+            "is_shown": true,
+            "display_name": "Input",
+            "refresh_button": false,
+            "input_types": [
+              "MESSAGE"
+            ],
+            "multiple_inputs": false,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": null,
+            "editable": true
+          },
+          {
+            "name": "tools",
+            "type": "TOOL",
+            "description": "에이전트가 사용할 도구들",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Tools",
+            "refresh_button": false,
+            "input_types": [
+              "TOOL"
+            ],
+            "multiple_inputs": true,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null
+          },
+          {
+            "name": "system_prompt_template",
+            "type": "PROMPT",
+            "description": "에이전트의 시스템 프롬프트 템플릿",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "System Prompt Template",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "너는 IVMS 자산 점검 준비 값을 전달하는 에이전트다.\n\n⚠️ 이 단계는 기능 검증용으로 값이 이미 확정되어 있다. 어떤 Tool도 호출하지 않는다.\n사용자가 무엇을 묻든, 조회나 확인을 시도하지 말고 아래 3개 값을 그대로 출력한다.\n\n출력 형식(이 형식으로만 출력하고 다른 설명은 덧붙이지 않는다):\n\norgId: org_000991\ntemplateNo: 151\nasstType: SSRCCE",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "system_prompt_template"
+            ],
+            "multiline": true,
+            "use_prompt_gallery": true
+          },
+          {
+            "name": "model",
+            "type": "DROPDOWN",
+            "description": "언어 모델 제공자",
+            "placeholder": "모델을 선택하세요",
+            "required": true,
+            "is_shown": true,
+            "display_name": "Model",
+            "refresh_button": true,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "azure_openai:gpt-5.5",
+            "should_update": true,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "options": [
+              "ixi:llm-ixi-gen-docs",
+              "ixi:llm-kexaone-k-exaone",
+              "azure_openai:gpt-5.1-chat",
+              "azure_openai:gpt-5.4-nano",
+              "azure_openai:gpt-5.4-mini",
+              "azure_openai:gpt-5.5",
+              "azure_openai:gpt-5.4"
+            ],
+            "option_item_metadata": [
+              {
+                "model_name": "llm-ixi-gen-docs",
+                "model_id": 401,
+                "provider_id": 4,
+                "provider_name": "ixi",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": false
+              },
+              {
+                "model_name": "llm-kexaone-k-exaone",
+                "model_id": 402,
+                "provider_id": 4,
+                "provider_name": "ixi",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": false
+              },
+              {
+                "model_name": "gpt-5.1-chat",
+                "model_id": 403,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4-nano",
+                "model_id": 404,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4-mini",
+                "model_id": 405,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.5",
+                "model_id": 406,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4",
+                "model_id": 407,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              }
+            ],
+            "searchable": false,
+            "model_before": "azure_openai:gpt-5.4-mini"
+          },
+          {
+            "name": "temperature",
+            "type": "SLIDER",
+            "description": "Temperature for the language model",
+            "placeholder": null,
+            "required": false,
+            "is_shown": false,
+            "display_name": "Temperature",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": 0.5,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "slider_range": {
+              "min": 0,
+              "max": 1,
+              "step": 0.1,
+              "default": 0.5
+            }
+          },
+          {
+            "name": "max_tokens",
+            "type": "INT",
+            "description": "Maximum number of tokens to generate in the response",
+            "placeholder": null,
+            "required": false,
+            "is_shown": false,
+            "display_name": "Max Tokens",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "is_positive": false
+          },
+          {
+            "name": "model_kwargs",
+            "type": "OBJECT",
+            "description": "모델의 추가 파라미터",
+            "placeholder": null,
+            "required": false,
+            "is_shown": false,
+            "display_name": "Model Parameters",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "properties": [
+              {
+                "name": "key",
+                "display_name": "Body Key",
+                "description": "파라미터 키",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              },
+              {
+                "name": "value",
+                "display_name": "Body Value",
+                "description": "파라미터 값",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              }
+            ],
+            "modifiable_row": false
+          }
+        ],
+        "name": "Agent",
+        "display_name": "Agent",
+        "description": "요청을 주어진 도구를 사용하여 처리하는 에이전트",
+        "category": "AGENT",
+        "can_be_tool": false
+      },
+      "canvas": {
+        "x": 705,
+        "y": 1140,
+        "width": 285,
+        "height": 461
+      }
+    },
+    {
+      "id": "b962296f-0c40-4e39-b3bf-00c8788ad0d3",
+      "metadata": {
+        "outputs": [],
+        "fields": [
+          {
+            "name": "input",
+            "type": "MESSAGE",
+            "description": "입력",
+            "placeholder": null,
+            "required": true,
+            "is_shown": true,
+            "display_name": "Input",
+            "refresh_button": false,
+            "input_types": [
+              "AI_MESSAGE"
+            ],
+            "multiple_inputs": true,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null
+          }
+        ],
+        "name": "ChatOutput",
+        "display_name": "Chat Output",
+        "description": "AI 출력 컴포넌트",
+        "category": "OUTPUT",
+        "can_be_tool": false
+      },
+      "canvas": {
+        "x": 2670,
+        "y": 1365,
+        "width": 285,
+        "height": 82
+      }
+    },
+    {
+      "id": "9a7b36c1-9d2f-4a37-a1bd-68b9ef34c0f3",
+      "metadata": {
+        "outputs": [
+          {
+            "name": "message",
+            "display_name": "User Message",
+            "output_types": [
+              "MESSAGE"
+            ],
+            "multiple_outputs": true
+          }
+        ],
+        "fields": [],
+        "name": "ChatInput",
+        "display_name": "Chat Input",
+        "description": "채팅 입력 컴포넌트",
+        "category": "INPUT",
+        "can_be_tool": false
+      },
+      "canvas": {
+        "x": 255,
+        "y": 1170,
+        "width": 285,
+        "height": 79
+      }
+    },
+    {
+      "id": "fcf02482-14dc-4d0c-883e-b243e03c6b3d",
+      "metadata": {
+        "can_be_tool": true,
+        "tool_mode": true,
+        "outputs": [
+          {
+            "name": "tool",
+            "display_name": "Tool",
+            "output_types": [
+              "TOOL"
+            ],
+            "multiple_outputs": true
+          }
+        ],
+        "fields": [
+          {
+            "name": "tool_description",
+            "type": "TEXT",
+            "description": "에이전트가 툴을 선택할 때 참고할 툴의 설명입니다.",
+            "placeholder": "툴을 자세히 묘사하여, 에이전트가 참고하는데 도움을 주세요.",
+            "required": true,
+            "is_shown": true,
+            "display_name": "툴 설명",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "조직 ID(mgmtOrgId) 기준으로 관리 자산 목록을 조회하는 도구. filter.xorStr에 SECURITY_SCORE neq 100 조건을 넣으면 미조치(취약) 자산만 필터링된다. 응답의 각 자산 레코드에는 담당자 ID/명(chrgId, chrgNm)이 포함되어 있다.",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": null,
+            "editable": true
+          },
+          {
+            "name": "url",
+            "type": "TEXT",
+            "description": "호출할 API의 주소를 입력하세요. 예: https://wttr.in/Seoul?format=j1",
+            "placeholder": "https://api.example.com/data",
+            "required": true,
+            "is_shown": true,
+            "display_name": "URL",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "https://ivms.lguplus.co.kr/ivms/api/mngtListDetail",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": "^(http|https)://[^\\s/$.?#].[^\\s]*$",
+            "editable": true
+          },
+          {
+            "name": "method",
+            "type": "DROPDOWN",
+            "description": "API 호출 방식을 선택하세요.\n- GET: 데이터를 조회할 때 사용\n- POST: 데이터를 전송하거나 생성할 때 사용\n- PUT: 데이터를 수정할 때 사용\n- PATCH: 데이터 일부만 수정할 때 사용\n- DELETE: 데이터를 삭제할 때 사용\n",
+            "placeholder": null,
+            "required": true,
+            "is_shown": true,
+            "display_name": "Method",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "POST",
+            "should_update": true,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "options": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "option_item_metadata": [],
+            "searchable": false
+          },
+          {
+            "name": "connect_timeout",
+            "type": "INT",
+            "description": "API 서버에 연결을 시도하는 최대 대기 시간입니다.\n- 설정한 시간 안에 연결되지 않으면 호출을 중단합니다.\n",
+            "placeholder": "기본값: 1000 ms",
+            "required": false,
+            "is_shown": true,
+            "display_name": "Connect Timeout (ms)",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": 3000,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "is_positive": true
+          },
+          {
+            "name": "read_timeout",
+            "type": "INT",
+            "description": "연결 후 API 서버의 응답을 기다리는 최대 시간입니다.\n- 설정한 시간 안에 응답이 없으면 호출을 중단합니다.\n",
+            "placeholder": "기본값: 3000 ms",
+            "required": false,
+            "is_shown": true,
+            "display_name": "Read Timeout (ms)",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": 30000,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "is_positive": true
+          },
+          {
+            "name": "header",
+            "type": "OBJECT",
+            "description": "API 서버 접근에 필요한 인증 정보를 설정합니다.\n- 인증이 필요 없으면 생략할 수 있으며, Content-Type 등 기본 헤더는 자동 적용됩니다.\n- API 키는 시크릿으로 먼저 등록한 뒤 선택할 수 있습니다.\n",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Header",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": [
+              {
+                "key": "X-Global-Transaction-ID",
+                "value": ""
+              },
+              {
+                "key": "X-APP-NAME",
+                "value": ""
+              },
+              {
+                "key": "X-AuthorizationTime",
+                "value": ""
+              },
+              {
+                "key": "X-Header-Authorization",
+                "value": ""
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "properties": [
+              {
+                "name": "key",
+                "display_name": "Header Key",
+                "description": "요청 헤더 키",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              },
+              {
+                "name": "value",
+                "display_name": "Header Value",
+                "description": "요청 헤더 값",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              }
+            ],
+            "modifiable_row": true
+          },
+          {
+            "name": "query_params",
+            "type": "OBJECT",
+            "description": "URL 뒤에 붙는 검색 조건이나 필터값을 설정합니다.\n- 예: https://api.example.com/data?category=food&limit=10 일 때 category, limit 같은 값을 Key/Value로 입력하면 자동으로 URL에 추가됩니다.\n",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Query Params",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "properties": [
+              {
+                "name": "name",
+                "display_name": "Query Param 이름",
+                "description": "Query Param 이름",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              },
+              {
+                "name": "description",
+                "display_name": "Query Param 설명",
+                "description": "Query Param 설명",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              }
+            ],
+            "modifiable_row": true
+          },
+          {
+            "name": "body",
+            "type": "SCHEMA",
+            "description": "POST, PUT, PATCH 요청 시 서버에 전달할 데이터 Body의 구조를 정의합니다.",
+            "placeholder": null,
+            "required": true,
+            "is_shown": true,
+            "display_name": "요청 본문 스키마",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "{\n  \"title\": \"mngtListDetail\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"userId\": {\n      \"type\": \"string\",\n      \"description\": \"요청 사용자 ID. \\\"admin\\\"을 사용한다.\"\n    },\n    \"mgmtOrgId\": {\n      \"type\": \"string\",\n      \"description\": \"조직 ID. 이전 단계가 확정한 orgId 값(예: org_000991).\"\n    },\n    \"asstType\": {\n      \"type\": \"string\",\n      \"description\": \"자산타입. 이전 단계가 확정한 값(예: SSRCCE).\"\n    },\n    \"templateNo\": {\n      \"type\": \"string\",\n      \"description\": \"진단템플릿 번호. 이전 단계가 확정한 값(예: 151).\"\n    },\n    \"diagYear\": {\n      \"type\": \"string\",\n      \"description\": \"기준연도. \\\"2026\\\"을 사용한다.\"\n    },\n    \"asstLCtgrId\": {\n      \"type\": \"string\",\n      \"description\": \"자산분류(대) ID. 이전 단계 assetCategory 응답의 asstCtgrId 값(예: AT_0005382). 값을 모르면 이 필드를 생략한다.\"\n    },\n    \"page\": {\n      \"type\": \"integer\",\n      \"description\": \"현재 페이지. 1부터 시작.\"\n    },\n    \"pageSize\": {\n      \"type\": \"integer\",\n      \"description\": \"페이지당 항목 수. 200을 사용한다.\"\n    },\n    \"filter\": {\n      \"type\": \"object\",\n      \"description\": \"미조치 필터. {\\\"xorStr\\\":{\\\"logic\\\":\\\"and\\\",\\\"filters\\\":[{\\\"field\\\":\\\"SECURITY_SCORE\\\",\\\"operator\\\":\\\"neq\\\",\\\"value\\\":\\\"100\\\"}]}}\",\n      \"properties\": {\n        \"xorStr\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"logic\": {\n              \"type\": \"string\"\n            },\n            \"filters\": {\n              \"type\": \"array\",\n              \"items\": {\n                \"type\": \"object\",\n                \"properties\": {\n                  \"field\": {\n                    \"type\": \"string\"\n                  },\n                  \"operator\": {\n                    \"type\": \"string\"\n                  },\n                  \"value\": {\n                    \"type\": \"string\"\n                  }\n                }\n              }\n            }\n          }\n        }\n      }\n    }\n  },\n  \"required\": [\n    \"userId\",\n    \"mgmtOrgId\",\n    \"asstType\",\n    \"templateNo\"\n  ],\n  \"additionalProperties\": true,\n  \"strict\": false\n}",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "data_types": [
+              "object",
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "array"
+            ]
+          }
+        ],
+        "name": "APIRequest",
+        "display_name": "API Request",
+        "description": "HTTP API 요청을 보내고 응답을 처리합니다.",
+        "category": "DATA",
+        "last_body_tool_mode_value": null,
+        "last_body_non_tool_mode_value": null,
+        "last_tool_description_value": null
+      },
+      "canvas": {
+        "x": 705,
+        "y": 1695,
+        "width": 285,
+        "height": 846
+      }
+    },
+    {
+      "id": "f388b4b7-f4c2-4c1a-9ffa-c43bae61f846",
+      "metadata": {
+        "can_be_tool": true,
+        "tool_mode": true,
+        "outputs": [
+          {
+            "name": "tool",
+            "display_name": "Tool",
+            "output_types": [
+              "TOOL"
+            ],
+            "multiple_outputs": true
+          }
+        ],
+        "fields": [
+          {
+            "name": "tool_description",
+            "type": "TEXT",
+            "description": "에이전트가 툴을 선택할 때 참고할 툴의 설명입니다.",
+            "placeholder": "툴을 자세히 묘사하여, 에이전트가 참고하는데 도움을 주세요.",
+            "required": true,
+            "is_shown": true,
+            "display_name": "툴 설명",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "툴 설명\t자산 코드(asstCode) 기준으로 취약점 항목별 상세 진단 결과를 조회하는 도구. resultStatusCdListStr에 [\"FAIL\"]을 지정하면 취약(미조치) 항목만 반환된다. 이 응답의 guidelineIfKey/itemCode/agentServerNm 값이 있어야 조치가이드(guidelineCdInfo)를 조회할 수 있다.",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": null,
+            "editable": true
+          },
+          {
+            "name": "url",
+            "type": "TEXT",
+            "description": "호출할 API의 주소를 입력하세요. 예: https://wttr.in/Seoul?format=j1",
+            "placeholder": "https://api.example.com/data",
+            "required": true,
+            "is_shown": true,
+            "display_name": "URL",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "https://ivms.lguplus.co.kr/ivms/api/scanResultCodeMngtDetail",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": "^(http|https)://[^\\s/$.?#].[^\\s]*$",
+            "editable": true
+          },
+          {
+            "name": "method",
+            "type": "DROPDOWN",
+            "description": "API 호출 방식을 선택하세요.\n- GET: 데이터를 조회할 때 사용\n- POST: 데이터를 전송하거나 생성할 때 사용\n- PUT: 데이터를 수정할 때 사용\n- PATCH: 데이터 일부만 수정할 때 사용\n- DELETE: 데이터를 삭제할 때 사용\n",
+            "placeholder": null,
+            "required": true,
+            "is_shown": true,
+            "display_name": "Method",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "POST",
+            "should_update": true,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "options": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "option_item_metadata": [],
+            "searchable": false
+          },
+          {
+            "name": "connect_timeout",
+            "type": "INT",
+            "description": "API 서버에 연결을 시도하는 최대 대기 시간입니다.\n- 설정한 시간 안에 연결되지 않으면 호출을 중단합니다.\n",
+            "placeholder": "기본값: 1000 ms",
+            "required": false,
+            "is_shown": true,
+            "display_name": "Connect Timeout (ms)",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": 3000,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "is_positive": true
+          },
+          {
+            "name": "read_timeout",
+            "type": "INT",
+            "description": "연결 후 API 서버의 응답을 기다리는 최대 시간입니다.\n- 설정한 시간 안에 응답이 없으면 호출을 중단합니다.\n",
+            "placeholder": "기본값: 3000 ms",
+            "required": false,
+            "is_shown": true,
+            "display_name": "Read Timeout (ms)",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": 30000,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "is_positive": true
+          },
+          {
+            "name": "header",
+            "type": "OBJECT",
+            "description": "API 서버 접근에 필요한 인증 정보를 설정합니다.\n- 인증이 필요 없으면 생략할 수 있으며, Content-Type 등 기본 헤더는 자동 적용됩니다.\n- API 키는 시크릿으로 먼저 등록한 뒤 선택할 수 있습니다.\n",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Header",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": [
+              {
+                "key": "X-Global-Transaction-ID",
+                "value": ""
+              },
+              {
+                "key": "X-APP-NAME",
+                "value": ""
+              },
+              {
+                "key": "X-AuthorizationTime",
+                "value": ""
+              },
+              {
+                "key": "X-Header-Authorization",
+                "value": ""
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "properties": [
+              {
+                "name": "key",
+                "display_name": "Header Key",
+                "description": "요청 헤더 키",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              },
+              {
+                "name": "value",
+                "display_name": "Header Value",
+                "description": "요청 헤더 값",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              }
+            ],
+            "modifiable_row": true
+          },
+          {
+            "name": "query_params",
+            "type": "OBJECT",
+            "description": "URL 뒤에 붙는 검색 조건이나 필터값을 설정합니다.\n- 예: https://api.example.com/data?category=food&limit=10 일 때 category, limit 같은 값을 Key/Value로 입력하면 자동으로 URL에 추가됩니다.\n",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Query Params",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "properties": [
+              {
+                "name": "name",
+                "display_name": "Query Param 이름",
+                "description": "Query Param 이름",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              },
+              {
+                "name": "description",
+                "display_name": "Query Param 설명",
+                "description": "Query Param 설명",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              }
+            ],
+            "modifiable_row": true
+          },
+          {
+            "name": "body",
+            "type": "SCHEMA",
+            "description": "POST, PUT, PATCH 요청 시 서버에 전달할 데이터 Body의 구조를 정의합니다.",
+            "placeholder": null,
+            "required": true,
+            "is_shown": true,
+            "display_name": "요청 본문 스키마",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "{\n  \"title\": \"scanResultCodeMngtDetailRequest\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"userId\": {\n      \"type\": \"string\",\n      \"description\": \"요청 사용자 ID (예: admin)\"\n    },\n    \"asstCode\": {\n      \"type\": \"array\",\n      \"description\": \"2단계 mngtListDetail 응답의 assetList[].asstCode 목록\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"hostNm\": {\n      \"type\": \"array\",\n      \"description\": \"호스트명 배열. ⚠️ 전달하지 말 것 — asstCode와 AND 조건으로 걸려 결과가 0건이 된다(2026-08-18 검증).\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"resultStatusCdListStr\": {\n      \"type\": \"string\",\n      \"description\": \"점검결과 리스트. \\\"[\\\\\\\"FAIL\\\\\\\"]\\\" 사용. ⚠️ 스펙표는 선택(N)이나 실제 필수값.\"\n    },\n    \"vadaYn\": {\n      \"type\": \"string\",\n      \"description\": \"자산타입 VADA 여부. \\\"N\\\" 고정. ⚠️ 스펙표는 선택(N)이나 실제 필수값.\"\n    },\n    \"severity\": {\n      \"type\": \"string\",\n      \"description\": \"취약도. 필수값이며 \\\"4\\\"(상)로 지정한다. 1(최하)~5(최상).\"\n    },\n    \"asstType\": {\n      \"type\": \"string\",\n      \"description\": \"자산타입 (2단계 assetCategory 응답과 동일 값)\"\n    },\n    \"atemplateNo\": {\n      \"type\": \"string\",\n      \"description\": \"진단템플릿 번호 (2단계 assetSsrcceTemplate 응답과 동일 값)\"\n    },\n    \"page\": {\n      \"type\": \"integer\",\n      \"description\": \"현재 페이지, 기본 1\"\n    },\n    \"pageSize\": {\n      \"type\": \"integer\",\n      \"description\": \"페이지당 항목 수. 반드시 50을 사용한다(검증된 성공값).\"\n    }\n  },\n  \"additionalProperties\": true,\n  \"strict\": false,\n  \"required\": [\n    \"userId\",\n    \"asstCode\",\n    \"resultStatusCdListStr\",\n    \"vadaYn\",\n    \"asstType\",\n    \"severity\"\n  ]\n}",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "data_types": [
+              "object",
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "array"
+            ]
+          }
+        ],
+        "name": "APIRequest",
+        "display_name": "API Request",
+        "description": "HTTP API 요청을 보내고 응답을 처리합니다.",
+        "category": "DATA",
+        "last_body_tool_mode_value": null,
+        "last_body_non_tool_mode_value": null,
+        "last_tool_description_value": null
+      },
+      "canvas": {
+        "x": 1485,
+        "y": 1695,
+        "width": 285,
+        "height": 846
+      }
+    },
+    {
+      "id": "d15d2eb5-853f-41a0-bef3-60eec84945b3",
+      "metadata": {
+        "outputs": [
+          {
+            "name": "response",
+            "display_name": "Response",
+            "output_types": [
+              "MESSAGE",
+              "AI_MESSAGE"
+            ],
+            "multiple_outputs": true
+          }
+        ],
+        "fields": [
+          {
+            "name": "input",
+            "type": "TEXT",
+            "description": "",
+            "placeholder": "",
+            "required": true,
+            "is_shown": true,
+            "display_name": "Input",
+            "refresh_button": false,
+            "input_types": [
+              "MESSAGE"
+            ],
+            "multiple_inputs": false,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": null,
+            "editable": true
+          },
+          {
+            "name": "tools",
+            "type": "TOOL",
+            "description": "에이전트가 사용할 도구들",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Tools",
+            "refresh_button": false,
+            "input_types": [
+              "TOOL"
+            ],
+            "multiple_inputs": true,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null
+          },
+          {
+            "name": "system_prompt_template",
+            "type": "PROMPT",
+            "description": "에이전트의 시스템 프롬프트 템플릿",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "System Prompt Template",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "너는 IVMS 미조치 자산의 담당자 목록을 수집하는 에이전트다.\n\n⚠️ 사용자 입력이 일부 작업만 요청하는 것처럼 보여도, 아래 작업을 끝까지 수행한다. 사용자 요청 문구에 따라 작업 범위를 줄이지 않는다.\n\n[입력 파싱]\n이전 단계가 아래 형식으로 넘겨준 텍스트를 그대로 파싱해 사용한다. 임의로 다른 값을 지어내거나, 재확인을 위해 orgList/assetCategory 등을 다시 호출하지 않는다(그 Tool들은 이 단계에 연결되어 있지도 않다).\n\norgId: 실제 값      → mngtListDetail의 mgmtOrgId에 사용\ntemplateNo: 실제 값 → mngtListDetail의 templateNo에 사용\nasstType: 실제 값   → mngtListDetail의 asstType에 사용\n\n세 값 중 하나라도 입력에서 찾을 수 없으면 mngtListDetail을 호출하지 말고, 어떤 값이 누락됐는지 명시해 응답한다.\n\n[작업] mngtListDetail 호출 — 담당자 목록만 경량 수집\n이 단계의 목적은 자산 상세가 아니라 \"담당자가 누구인지\"만 가볍게 추출하는 것이다.\n\n- Body에 userId=\"admin\", mgmtOrgId, asstType, templateNo, diagYear=\"2026\", page, pageSize, filter를 넣어 호출한다.\n- page는 숫자 1, pageSize는 숫자 200으로 integer 타입으로 넣는다.\n  ⚠️ pageSize를 작은 값으로 쓰지 않는다 — 자산이 많은 조직에서 페이지 반복 호출이 급증해 컨텍스트 예산을 초과한다.\n- filter는 미조치 자산만 걸러내기 위해 아래를 사용한다:\n  {\"xorStr\":{\"logic\":\"and\",\"filters\":[{\"field\":\"SECURITY_SCORE\",\"operator\":\"neq\",\"value\":\"100\"}]}}\n- 첫 호출이 실패하면(msgCd:E 등) filter를 뺀 나머지 파라미터만으로 1회 재시도하고, 그래도 실패하면\n  실패 응답 원문을 그대로 보여주며 중단한다. 파라미터를 임의로 바꿔가며 여러 번 재시도하지 않는다.\n\n[응답 처리 — 반드시 지킬 것]\n- ⚠️ 응답 assetList[]에서 chrgId, chrgNm(담당자 정보) 두 필드만 추출한다.\n  asstNm, asstCode, hostNm, securityScore, timeEndYmd 등 자산 상세 필드는 절대 응답에 포함하지 않고\n  기억하지도 않는다(페이지 처리 후 즉시 버린다). 이 필드들을 누적하면 컨텍스트 예산을 초과한다.\n- chrgId가 이미 수집한 목록에 있으면 다시 추가하지 않고, 새로운 chrgId만 (chrgId, chrgNm) 쌍으로 누적한다.\n- chrgId와 chrgNm이 둘 다 비어 있는 자산이 하나라도 있으면, 담당자 목록과 별도로\n  \"담당자 미배정 자산 존재: 예\" 플래그를 응답에 포함한다(그 자산의 상세는 다루지 않는다).\n- ⚠️ 이 호출은 정확히 1회만 수행한다. page를 늘려가며 반복 호출하지 않는다.\n  응답 건수가 200건이어서 다음 페이지가 있더라도 추가 호출하지 않고, 그때까지 수집한 담당자 목록으로 응답을 구성하며\n  응답 맨 앞에 \"⚠️ 기능 검증을 위해 1페이지(최대 200건)만 스캔했습니다\"라고 명시한다.\n\n[출력 형식]\n아래 형식으로만 출력한다. 자산 상세 필드는 어떤 경우에도 포함하지 않는다.\n\norgId: 실제 값\ntemplateNo: 실제 값\nasstType: 실제 값\n총 호출 페이지 수: 실제 값\n담당자 미배정 자산 존재: 예 또는 아니오\n\n담당자 목록:\n| chrgId | chrgNm |\n|---|---|\n| (값) | (값) |",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "system_prompt_template"
+            ],
+            "multiline": true,
+            "use_prompt_gallery": true
+          },
+          {
+            "name": "model",
+            "type": "DROPDOWN",
+            "description": "언어 모델 제공자",
+            "placeholder": "모델을 선택하세요",
+            "required": true,
+            "is_shown": true,
+            "display_name": "Model",
+            "refresh_button": true,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "azure_openai:gpt-5.5",
+            "should_update": true,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "options": [
+              "ixi:llm-ixi-gen-docs",
+              "ixi:llm-kexaone-k-exaone",
+              "azure_openai:gpt-5.1-chat",
+              "azure_openai:gpt-5.4-nano",
+              "azure_openai:gpt-5.4-mini",
+              "azure_openai:gpt-5.5",
+              "azure_openai:gpt-5.4"
+            ],
+            "option_item_metadata": [
+              {
+                "model_name": "llm-ixi-gen-docs",
+                "model_id": 401,
+                "provider_id": 4,
+                "provider_name": "ixi",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": false
+              },
+              {
+                "model_name": "llm-kexaone-k-exaone",
+                "model_id": 402,
+                "provider_id": 4,
+                "provider_name": "ixi",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": false
+              },
+              {
+                "model_name": "gpt-5.1-chat",
+                "model_id": 403,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4-nano",
+                "model_id": 404,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4-mini",
+                "model_id": 405,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.5",
+                "model_id": 406,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4",
+                "model_id": 407,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              }
+            ],
+            "searchable": false
+          }
+        ],
+        "name": "Agent",
+        "display_name": "Agent",
+        "description": "요청을 주어진 도구를 사용하여 처리하는 에이전트",
+        "category": "AGENT",
+        "can_be_tool": false
+      },
+      "canvas": {
+        "x": 1065,
+        "y": 1125,
+        "width": 285,
+        "height": 461
+      }
+    },
+    {
+      "id": "e156837d-c7e1-4729-baed-8aa5cffc5c00",
+      "metadata": {
+        "outputs": [
+          {
+            "name": "response",
+            "display_name": "Response",
+            "output_types": [
+              "MESSAGE",
+              "AI_MESSAGE"
+            ],
+            "multiple_outputs": true
+          }
+        ],
+        "fields": [
+          {
+            "name": "input",
+            "type": "TEXT",
+            "description": "",
+            "placeholder": "",
+            "required": true,
+            "is_shown": true,
+            "display_name": "Input",
+            "refresh_button": false,
+            "input_types": [
+              "MESSAGE"
+            ],
+            "multiple_inputs": false,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": null,
+            "editable": true
+          },
+          {
+            "name": "tools",
+            "type": "TOOL",
+            "description": "에이전트가 사용할 도구들",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Tools",
+            "refresh_button": false,
+            "input_types": [
+              "TOOL"
+            ],
+            "multiple_inputs": true,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null
+          },
+          {
+            "name": "system_prompt_template",
+            "type": "PROMPT",
+            "description": "에이전트의 시스템 프롬프트 템플릿",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "System Prompt Template",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "너는 미조치 자산의 취약점 항목 상세를 수집하는 에이전트다.\n\n⚠️ 이 단계는 기능 검증 목적이므로 데이터 완전성보다 컨텍스트 절약을 우선한다.\n\n[입력 파싱]\n이전 단계가 넘겨준 자산 목록 표에서 asstCode와 hostNm을, 그리고 orgId/templateNo/asstType/조회한 담당자를 파싱한다.\n임의로 값을 지어내거나 이전 단계 Tool을 다시 호출하지 않는다.\nasstCode를 하나도 찾을 수 없으면 scanResultCodeMngtDetail을 호출하지 말고 그 사실을 명시해 응답한다.\n\n[작업] scanResultCodeMngtDetail 호출\n- ⚠️ 입력 자산이 5건을 넘으면 앞에서부터 5건만 사용한다. 나머지는 이번 단계에서 조회하지 않는다.\n  (08번 문서의 검증된 성공 사례는 asstCode 2건이었다. 기능 검증이 목적이므로 소량으로 시작한다.)\n- ⚠️ asstCode 배열만 전달한다. hostNm은 절대 전달하지 않는다.\n  (2026-08-18 개발기 curl 검증: asstCode와 hostNm을 함께 보내면 AND 조건으로 걸려 결과가 0건이 된다.\n   hostNm을 빼면 정상적으로 항목이 조회된다.)\n- Body: userId=\"admin\", asstCode에 자산코드 배열,\n  resultStatusCdListStr=\"[\\\"FAIL\\\"]\", vadaYn=\"N\",\n  asstType 에는 입력에서 파싱한 asstType 값, atemplateNo 에는 입력에서 파싱한 templateNo 값,\n  page=1, pageSize=50(integer)\n- ⚠️ resultStatusCdListStr과 vadaYn은 08번 문서 스펙표에 선택(N)으로 적혀 있으나\n  실제로는 서버가 요구하는 필수값이다(2026-08-18 개발기 curl 검증). 절대 생략하지 않는다.\n- ⚠️ severity는 필수 파라미터이므로 반드시 \"4\"(상)로 지정한다. 생략하면 호출이 거부된다.\n  단, 서버가 severity 필터를 엄격히 적용하지 않아 응답에 다른 severity 값이 섞여 올 수 있다.\n  이번 단계는 기능 검증이 목적이므로 응답에 섞여 온 항목을 제외하지 말고 그대로 수집하되,\n  각 항목의 실제 severity 값을 있는 그대로 표에 적는다.\n- ⚠️ 이 호출은 정확히 1회만 수행한다. page를 늘려가며 반복 호출하지 않는다.\n\n[응답 처리 — 컨텍스트 절약 규칙]\n- 응답 scanRsltCodeList[]에서 아래 8개 필드만 추출한다. 그 외 필드는 기억하지 않는다.\n  asstCode, guidelineCd, guidelineNm, severity, guidelineIfKey, itemCode, agentServerNm, resultIfKey\n  ⚠️ 이 중 guidelineIfKey, itemCode, agentServerNm, resultIfKey 4개는 다음 단계(조치가이드 조회)에서\n  반드시 필요한 키다. 하나라도 누락하면 다음 단계가 동작하지 않으므로 정확히 그대로 보존한다.\n- ⚠️ 추출한 항목이 15건을 넘으면 앞에서부터 15건만 남기고 나머지는 버린다. 버린 건수는 숫자로만 보고한다.\n- 조치가이드(measure) 조회는 이번 단계에서 하지 않는다.\n\n[호출 실패 시]\nmsgCd:E 등으로 실패하면 파라미터를 임의로 바꿔가며 반복 재시도하지 말고,\n실패 응답 원문을 그대로 보여주며 중단한다.\n\n[출력 형식]\n아래 형식으로만 출력한다.\n\norgId: 실제 값\ntemplateNo: 실제 값\nasstType: 실제 값\n조회한 담당자: 담당자명(chrgId)\n수집한 취약점 항목 수: 실제 값\n컨텍스트 절약을 위해 버린 항목 수: 실제 값\n\n취약점 항목 목록:\n| asstCode | guidelineCd | guidelineNm | severity | itemCode | guidelineIfKey | agentServerNm | resultIfKey |\n|---|---|---|---|---|---|---|---|\n| 실제 값 | 실제 값 | 실제 값 | 실제 값 | 실제 값 | 실제 값 | 실제 값 | 실제 값 |",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "system_prompt_template"
+            ],
+            "multiline": true,
+            "use_prompt_gallery": true
+          },
+          {
+            "name": "model",
+            "type": "DROPDOWN",
+            "description": "언어 모델 제공자",
+            "placeholder": "모델을 선택하세요",
+            "required": true,
+            "is_shown": true,
+            "display_name": "Model",
+            "refresh_button": true,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "azure_openai:gpt-5.5",
+            "should_update": true,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "options": [
+              "ixi:llm-ixi-gen-docs",
+              "ixi:llm-kexaone-k-exaone",
+              "azure_openai:gpt-5.1-chat",
+              "azure_openai:gpt-5.4-nano",
+              "azure_openai:gpt-5.4-mini",
+              "azure_openai:gpt-5.5",
+              "azure_openai:gpt-5.4"
+            ],
+            "option_item_metadata": [
+              {
+                "model_name": "llm-ixi-gen-docs",
+                "model_id": 401,
+                "provider_id": 4,
+                "provider_name": "ixi",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": false
+              },
+              {
+                "model_name": "llm-kexaone-k-exaone",
+                "model_id": 402,
+                "provider_id": 4,
+                "provider_name": "ixi",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": false
+              },
+              {
+                "model_name": "gpt-5.1-chat",
+                "model_id": 403,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4-nano",
+                "model_id": 404,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4-mini",
+                "model_id": 405,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.5",
+                "model_id": 406,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4",
+                "model_id": 407,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              }
+            ],
+            "searchable": false
+          },
+          {
+            "name": "temperature",
+            "type": "SLIDER",
+            "description": "Temperature for the language model",
+            "placeholder": null,
+            "required": false,
+            "is_shown": false,
+            "display_name": "Temperature",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": 0.5,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "slider_range": {
+              "min": 0,
+              "max": 1,
+              "step": 0.1,
+              "default": 0.5
+            }
+          },
+          {
+            "name": "max_tokens",
+            "type": "INT",
+            "description": "Maximum number of tokens to generate in the response",
+            "placeholder": null,
+            "required": false,
+            "is_shown": false,
+            "display_name": "Max Tokens",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "is_positive": false
+          },
+          {
+            "name": "model_kwargs",
+            "type": "OBJECT",
+            "description": "모델의 추가 파라미터",
+            "placeholder": null,
+            "required": false,
+            "is_shown": false,
+            "display_name": "Model Parameters",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "properties": [
+              {
+                "name": "key",
+                "display_name": "Body Key",
+                "description": "파라미터 키",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              },
+              {
+                "name": "value",
+                "display_name": "Body Value",
+                "description": "파라미터 값",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              }
+            ],
+            "modifiable_row": false
+          }
+        ],
+        "name": "Agent",
+        "display_name": "Agent",
+        "description": "요청을 주어진 도구를 사용하여 처리하는 에이전트",
+        "category": "AGENT",
+        "can_be_tool": false
+      },
+      "canvas": {
+        "x": 1905,
+        "y": 1125,
+        "width": 285,
+        "height": 461
+      }
+    },
+    {
+      "id": "1e59d6cd-7621-4d14-9011-975fcf919ad8",
+      "metadata": {
+        "outputs": [
+          {
+            "name": "response",
+            "display_name": "Response",
+            "output_types": [
+              "MESSAGE",
+              "AI_MESSAGE"
+            ],
+            "multiple_outputs": true
+          }
+        ],
+        "fields": [
+          {
+            "name": "input",
+            "type": "TEXT",
+            "description": "",
+            "placeholder": "",
+            "required": true,
+            "is_shown": true,
+            "display_name": "Input",
+            "refresh_button": false,
+            "input_types": [
+              "MESSAGE"
+            ],
+            "multiple_inputs": false,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": null,
+            "editable": true
+          },
+          {
+            "name": "tools",
+            "type": "TOOL",
+            "description": "에이전트가 사용할 도구들",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Tools",
+            "refresh_button": false,
+            "input_types": [
+              "TOOL"
+            ],
+            "multiple_inputs": true,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null
+          },
+          {
+            "name": "system_prompt_template",
+            "type": "PROMPT",
+            "description": "에이전트의 시스템 프롬프트 템플릿",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "System Prompt Template",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "너는 담당자별 미조치 자산의 자산코드를 수집하는 에이전트다.\n\n⚠️ 이 단계는 기능 검증 목적이므로 데이터 완전성보다 컨텍스트 절약을 우선한다. 아래 축소 규칙을 반드시 지킨다.\n\n[입력 파싱]\n이전 단계가 넘겨준 텍스트에서 아래를 파싱한다. 임의로 값을 지어내거나 이전 단계 Tool을 다시 호출하지 않는다.\n- orgId, templateNo, asstType\n- 담당자 목록 표(chrgId, chrgNm 쌍)\n\n[작업] 담당자 1명만 정밀조회\n⚠️ 담당자 목록에 여러 명이 있어도 반드시 맨 앞 1명만 처리한다. 나머지 담당자는 이번 단계에서 조회하지 않는다.\n⚠️ 담당자 미배정 자산도 이번 단계에서는 조회하지 않는다.\n\nmngtListDetail을 호출한다.\n- Body: userId=\"admin\", mgmtOrgId 에는 입력에서 파싱한 orgId 값, asstType 에는 입력에서 파싱한 asstType 값,\n  templateNo 에는 입력에서 파싱한 templateNo 값, diagYear=\"2026\",\n  rspnMngId 에는 선택한 담당자 1명의 chrgId 값, page=1, pageSize=200(integer),\n  filter={\"xorStr\":{\"logic\":\"and\",\"filters\":[{\"field\":\"SECURITY_SCORE\",\"operator\":\"neq\",\"value\":\"100\"}]}}\n- ⚠️ 이 호출은 정확히 1회만 수행한다. page를 늘려가며 반복 호출하지 않는다.\n  응답 건수가 200건이어서 다음 페이지가 있더라도 추가 호출하지 않고 그대로 진행한다.\n\n[응답 처리 — 컨텍스트 절약 규칙]\n- ⚠️ 응답 assetList[]에서 asstCode와 hostNm 두 필드만 추출한다.\n  asstNm, securityScore, timeEndYmd, mgmtOrgId 등 나머지 필드는 응답에 포함하지 않고 기억하지도 않는다.\n  (이 필드들을 누적하면 컨텍스트 예산을 초과한다. 2026-08-18 실제 확인된 오류 원인)\n- ⚠️ 추출한 자산이 30건을 넘으면 앞에서부터 30건만 남기고 나머지는 버린다.\n  버린 건수는 마지막에 숫자로만 보고한다.\n- asstCode가 비어 있는 자산은 제외한다(다음 단계에서 사용할 수 없는 값이다).\n\n[호출 실패 시]\nmsgCd:E 등으로 실패하면 filter를 뺀 나머지 파라미터로 1회만 재시도하고, 그래도 실패하면\n실패 응답 원문을 그대로 보여주며 중단한다. 파라미터를 임의로 바꿔가며 여러 번 재시도하지 않는다.\n\n[출력 형식]\n아래 형식으로만 출력한다. 자산 상세 필드는 어떤 경우에도 포함하지 않는다.\n\norgId: 실제 값\ntemplateNo: 실제 값\nasstType: 실제 값\n조회한 담당자: 담당자명(chrgId)\n수집한 자산 수: 실제 값\n컨텍스트 절약을 위해 버린 자산 수: 실제 값\n\n자산 목록:\n| asstCode | hostNm |\n|---|---|\n| 실제 값 | 실제 값 |",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "system_prompt_template"
+            ],
+            "multiline": true,
+            "use_prompt_gallery": true
+          },
+          {
+            "name": "model",
+            "type": "DROPDOWN",
+            "description": "언어 모델 제공자",
+            "placeholder": "모델을 선택하세요",
+            "required": true,
+            "is_shown": true,
+            "display_name": "Model",
+            "refresh_button": true,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "azure_openai:gpt-5.5",
+            "should_update": true,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "options": [
+              "ixi:llm-ixi-gen-docs",
+              "ixi:llm-kexaone-k-exaone",
+              "azure_openai:gpt-5.1-chat",
+              "azure_openai:gpt-5.4-nano",
+              "azure_openai:gpt-5.4-mini",
+              "azure_openai:gpt-5.5",
+              "azure_openai:gpt-5.4"
+            ],
+            "option_item_metadata": [
+              {
+                "model_name": "llm-ixi-gen-docs",
+                "model_id": 401,
+                "provider_id": 4,
+                "provider_name": "ixi",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": false
+              },
+              {
+                "model_name": "llm-kexaone-k-exaone",
+                "model_id": 402,
+                "provider_id": 4,
+                "provider_name": "ixi",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": false
+              },
+              {
+                "model_name": "gpt-5.1-chat",
+                "model_id": 403,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4-nano",
+                "model_id": 404,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4-mini",
+                "model_id": 405,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.5",
+                "model_id": 406,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4",
+                "model_id": 407,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              }
+            ],
+            "searchable": false
+          },
+          {
+            "name": "temperature",
+            "type": "SLIDER",
+            "description": "Temperature for the language model",
+            "placeholder": null,
+            "required": false,
+            "is_shown": false,
+            "display_name": "Temperature",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": 0.5,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "slider_range": {
+              "min": 0,
+              "max": 1,
+              "step": 0.1,
+              "default": 0.5
+            }
+          },
+          {
+            "name": "max_tokens",
+            "type": "INT",
+            "description": "Maximum number of tokens to generate in the response",
+            "placeholder": null,
+            "required": false,
+            "is_shown": false,
+            "display_name": "Max Tokens",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "is_positive": false
+          },
+          {
+            "name": "model_kwargs",
+            "type": "OBJECT",
+            "description": "모델의 추가 파라미터",
+            "placeholder": null,
+            "required": false,
+            "is_shown": false,
+            "display_name": "Model Parameters",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "properties": [
+              {
+                "name": "key",
+                "display_name": "Body Key",
+                "description": "파라미터 키",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              },
+              {
+                "name": "value",
+                "display_name": "Body Value",
+                "description": "파라미터 값",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              }
+            ],
+            "modifiable_row": false
+          }
+        ],
+        "name": "Agent",
+        "display_name": "Agent",
+        "description": "요청을 주어진 도구를 사용하여 처리하는 에이전트",
+        "category": "AGENT",
+        "can_be_tool": false
+      },
+      "canvas": {
+        "x": 1485,
+        "y": 1125,
+        "width": 285,
+        "height": 461
+      }
+    },
+    {
+      "id": "e018de7a-9a07-49b6-b0f7-afd0286955d0",
+      "metadata": {
+        "can_be_tool": true,
+        "tool_mode": true,
+        "outputs": [
+          {
+            "name": "tool",
+            "display_name": "Tool",
+            "output_types": [
+              "TOOL"
+            ],
+            "multiple_outputs": true
+          }
+        ],
+        "fields": [
+          {
+            "name": "tool_description",
+            "type": "TEXT",
+            "description": "에이전트가 툴을 선택할 때 참고할 툴의 설명입니다.",
+            "placeholder": "툴을 자세히 묘사하여, 에이전트가 참고하는데 도움을 주세요.",
+            "required": true,
+            "is_shown": true,
+            "display_name": "툴 설명",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "조직 ID(mgmtOrgId) 기준으로 관리 자산 목록을 조회하는 도구. filter.xorStr에 SECURITY_SCORE neq 100 조건을 넣으면 미조치(취약) 자산만 필터링된다. 응답의 각 자산 레코드에는 담당자 ID/명(chrgId, chrgNm)이 포함되어 있다.",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": null,
+            "editable": true
+          },
+          {
+            "name": "url",
+            "type": "TEXT",
+            "description": "호출할 API의 주소를 입력하세요. 예: https://wttr.in/Seoul?format=j1",
+            "placeholder": "https://api.example.com/data",
+            "required": true,
+            "is_shown": true,
+            "display_name": "URL",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "https://ivms.lguplus.co.kr/ivms/api/mngtListDetail",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": "^(http|https)://[^\\s/$.?#].[^\\s]*$",
+            "editable": true
+          },
+          {
+            "name": "method",
+            "type": "DROPDOWN",
+            "description": "API 호출 방식을 선택하세요.\n- GET: 데이터를 조회할 때 사용\n- POST: 데이터를 전송하거나 생성할 때 사용\n- PUT: 데이터를 수정할 때 사용\n- PATCH: 데이터 일부만 수정할 때 사용\n- DELETE: 데이터를 삭제할 때 사용\n",
+            "placeholder": null,
+            "required": true,
+            "is_shown": true,
+            "display_name": "Method",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "POST",
+            "should_update": true,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "options": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "option_item_metadata": [],
+            "searchable": false
+          },
+          {
+            "name": "connect_timeout",
+            "type": "INT",
+            "description": "API 서버에 연결을 시도하는 최대 대기 시간입니다.\n- 설정한 시간 안에 연결되지 않으면 호출을 중단합니다.\n",
+            "placeholder": "기본값: 1000 ms",
+            "required": false,
+            "is_shown": true,
+            "display_name": "Connect Timeout (ms)",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": 3000,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "is_positive": true
+          },
+          {
+            "name": "read_timeout",
+            "type": "INT",
+            "description": "연결 후 API 서버의 응답을 기다리는 최대 시간입니다.\n- 설정한 시간 안에 응답이 없으면 호출을 중단합니다.\n",
+            "placeholder": "기본값: 3000 ms",
+            "required": false,
+            "is_shown": true,
+            "display_name": "Read Timeout (ms)",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": 30000,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "is_positive": true
+          },
+          {
+            "name": "header",
+            "type": "OBJECT",
+            "description": "API 서버 접근에 필요한 인증 정보를 설정합니다.\n- 인증이 필요 없으면 생략할 수 있으며, Content-Type 등 기본 헤더는 자동 적용됩니다.\n- API 키는 시크릿으로 먼저 등록한 뒤 선택할 수 있습니다.\n",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Header",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": [
+              {
+                "key": "X-Global-Transaction-ID",
+                "value": ""
+              },
+              {
+                "key": "X-APP-NAME",
+                "value": ""
+              },
+              {
+                "key": "X-AuthorizationTime",
+                "value": ""
+              },
+              {
+                "key": "X-Header-Authorization",
+                "value": ""
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "properties": [
+              {
+                "name": "key",
+                "display_name": "Header Key",
+                "description": "요청 헤더 키",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              },
+              {
+                "name": "value",
+                "display_name": "Header Value",
+                "description": "요청 헤더 값",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              }
+            ],
+            "modifiable_row": true
+          },
+          {
+            "name": "query_params",
+            "type": "OBJECT",
+            "description": "URL 뒤에 붙는 검색 조건이나 필터값을 설정합니다.\n- 예: https://api.example.com/data?category=food&limit=10 일 때 category, limit 같은 값을 Key/Value로 입력하면 자동으로 URL에 추가됩니다.\n",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Query Params",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "properties": [
+              {
+                "name": "name",
+                "display_name": "Query Param 이름",
+                "description": "Query Param 이름",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              },
+              {
+                "name": "description",
+                "display_name": "Query Param 설명",
+                "description": "Query Param 설명",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              }
+            ],
+            "modifiable_row": true
+          },
+          {
+            "name": "body",
+            "type": "SCHEMA",
+            "description": "POST, PUT, PATCH 요청 시 서버에 전달할 데이터 Body의 구조를 정의합니다.",
+            "placeholder": null,
+            "required": true,
+            "is_shown": true,
+            "display_name": "요청 본문 스키마",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "{\n  \"title\": \"mngtListDetail\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"mgmtOrgId\": {\n      \"type\": \"string\",\n      \"description\": \"조직 ID (orgList에서 확정한 orgId)\"\n    },\n    \"asstType\": {\n      \"type\": \"string\",\n      \"description\": \"자산타입 (assetCategory 응답의 asstType)\"\n    },\n    \"templateNo\": {\n      \"type\": \"string\",\n      \"description\": \"진단템플릿 번호 (assetSsrcceTemplate 응답의 atemplateNo)\"\n    },\n    \"asstLCtgrId\": {\n      \"type\": \"string\",\n      \"description\": \"자산분류(대) ID. 값을 모르면 이 필드를 생략한다.\"\n    },\n    \"diagYear\": {\n      \"type\": \"string\",\n      \"description\": \"기준연도 (예: 2025)\"\n    },\n    \"userId\": {\n      \"type\": \"string\",\n      \"description\": \"요청 사용자 ID (예: jwyoon21)\"\n    },\n    \"rspnMngId\": {\n      \"type\": \"string\",\n      \"description\": \"담당자 ID (Agent #1B가 넘긴 chrgId 값, 담당자 1인 단위로 순회하며 채움)\"\n    },\n    \"filter\": {\n      \"type\": \"object\",\n      \"description\": \"미조치(SECURITY_SCORE neq 100) 필터 객체\",\n      \"properties\": {\n        \"xorStr\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"logic\": {\n              \"type\": \"string\"\n            },\n            \"filters\": {\n              \"type\": \"array\",\n              \"items\": {\n                \"type\": \"object\",\n                \"properties\": {\n                  \"field\": {\n                    \"type\": \"string\"\n                  },\n                  \"operator\": {\n                    \"type\": \"string\"\n                  },\n                  \"value\": {\n                    \"type\": \"string\"\n                  }\n                }\n              }\n            }\n          }\n        }\n      }\n    },\n    \"page\": {\n      \"type\": \"integer\",\n      \"description\": \"현재 페이지 (1부터 시작, 반드시 숫자 타입)\"\n    },\n    \"pageSize\": {\n      \"type\": \"integer\",\n      \"description\": \"페이지당 항목 수 (200 권장)\"\n    }\n  },\n  \"required\": [\n    \"userId\",\n    \"mgmtOrgId\",\n    \"asstType\",\n    \"templateNo\",\n    \"rspnMngId\"\n  ],\n  \"additionalProperties\": true,\n  \"strict\": false\n}",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "data_types": [
+              "object",
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "array"
+            ]
+          }
+        ],
+        "name": "APIRequest",
+        "display_name": "API Request",
+        "description": "HTTP API 요청을 보내고 응답을 처리합니다.",
+        "category": "DATA",
+        "last_body_tool_mode_value": null,
+        "last_body_non_tool_mode_value": null,
+        "last_tool_description_value": null
+      },
+      "canvas": {
+        "x": 1080,
+        "y": 1695,
+        "width": 285,
+        "height": 846
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "9a7b36c1-9d2f-4a37-a1bd-68b9ef34c0f3",
+      "source_output_name": "message",
+      "target": "b28ce8c2-7c40-43bb-b7d6-d45605f62d24",
+      "target_field_name": "input"
+    },
+    {
+      "source": "fcf02482-14dc-4d0c-883e-b243e03c6b3d",
+      "source_output_name": "tool",
+      "target": "d15d2eb5-853f-41a0-bef3-60eec84945b3",
+      "target_field_name": "tools"
+    },
+    {
+      "source": "b28ce8c2-7c40-43bb-b7d6-d45605f62d24",
+      "source_output_name": "response",
+      "target": "d15d2eb5-853f-41a0-bef3-60eec84945b3",
+      "target_field_name": "input"
+    },
+    {
+      "source": "f388b4b7-f4c2-4c1a-9ffa-c43bae61f846",
+      "source_output_name": "tool",
+      "target": "e156837d-c7e1-4729-baed-8aa5cffc5c00",
+      "target_field_name": "tools"
+    },
+    {
+      "source": "d15d2eb5-853f-41a0-bef3-60eec84945b3",
+      "source_output_name": "response",
+      "target": "1e59d6cd-7621-4d14-9011-975fcf919ad8",
+      "target_field_name": "input"
+    },
+    {
+      "source": "e018de7a-9a07-49b6-b0f7-afd0286955d0",
+      "source_output_name": "tool",
+      "target": "1e59d6cd-7621-4d14-9011-975fcf919ad8",
+      "target_field_name": "tools"
+    },
+    {
+      "source": "1e59d6cd-7621-4d14-9011-975fcf919ad8",
+      "source_output_name": "response",
+      "target": "e156837d-c7e1-4729-baed-8aa5cffc5c00",
+      "target_field_name": "input"
+    },
+    {
+      "source": "e156837d-c7e1-4729-baed-8aa5cffc5c00",
+      "source_output_name": "response",
+      "target": "b962296f-0c40-4e39-b3bf-00c8788ad0d3",
+      "target_field_name": "input"
+    }
+  ],
+  "notes": [],
+  "display_name": "ivms stage3 - 취약점 상세 수집",
+  "is_favorite": false,
+  "has_schedule": false,
+  "status": "ACTIVE",
+  "ownership": "MY",
+  "validation_status": "VALID",
+  "validation_errors": [],
+  "tags": [
+    {
+      "id": 187,
+      "name": "보안"
+    }
+  ]
+}

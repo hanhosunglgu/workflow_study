@@ -12,6 +12,7 @@
 |------|----------|------|------|
 | Chat Input | I/O | ✅ 확인 | 채팅 입력 컴포넌트 |
 | Chat Output | I/O | ✅ 확인 | AI 출력 컴포넌트 |
+| **Send Mail Output** | **I/O** | ✅ **확인(2026-08-20 추가)** | **메일 발송 컴포넌트** — `mail_title`(필수), `mail_receiver`(필수, ARRAY), `input`(필수, `['DATA','AI_MESSAGE']`). ⚠️ 본문이 평문이라 줄바꿈이 표시되지 않음(REQ-020) |
 | JSON Output | I/O | ✅ 확인 | JSON 출력 컴포넌트 (Structured Output 결과 출력) |
 | Template Message | I/O | ✅ 확인 | 템플릿화 된 휴먼 메시지 생성 |
 | Language Model | AI/LLM | ✅ 확인 | LLM으로 입력 메시지에 대한 응답 생성 |
@@ -148,7 +149,20 @@
   | Structured Output | 메시지를 구조화된 데이터로 변환 |
   | PLL Guardrail | PII 필터링 컴포넌트 |
   | Moderation Guardrail | 콘텐츠 안전 필터링 컴포넌트 |
-- ⚠️ **Chat Output 연결 방향 주의**: Language Model Response 포트에서 드래그 시 Chat Output이 목록에 없음 (UI 검증 2026-05-18). Chat Output Input 포트에서 드래그 시 Language Model 선택 가능 — Chat Output 쪽에서 연결 시작할 것. Human Approval 출력 → Chat Output 직접 연결은 양방향 모두 불가 — Agent 또는 Language Model 경유 필수.
+- ⚠️ **Chat Output 연결 방향 주의**: Language Model Response 포트에서 드래그 시 Chat Output이 목록에 없음 (UI 검증 2026-05-18). Chat Output Input 포트에서 드래그 시 Language Model 선택 가능 — Chat Output 쪽에서 연결 시작할 것. Human Approval 출력 → Chat Output 직접 연결은 양방향 모두 불가 — ~~Agent 또는~~ **Language Model 경유 필수**.
+
+> 🔴 **정정(2026-08-20, 실측)**: 위의 "**Agent 또는** Language Model 경유"는 부정확하다. **Agent 경유는 실제로 불가능**하다.
+>
+> `Chat Output`/`Send Mail Output`의 `input`은 **`AI_MESSAGE` 타입만** 허용하는데, Agent의 `response`는 런타임에 `MESSAGE`로 해석되어 거부된다. 실측 오류:
+> ```
+> 소스 출력 타입 [MESSAGE]은(는) 대상 필드 입력 타입 [DATA, AI_MESSAGE]과(와)
+> 호환되지 않습니다. 컴포넌트에 타입에 맞춰 다시 연결해주세요.
+> ```
+> **`AI_MESSAGE`를 생성할 수 있는 노드는 Language Model뿐**이므로, 출력 노드 앞 경유 노드는 Language Model로 한정된다.
+>
+> ⚠️ **주의**: export JSON에서 Agent와 Language Model의 `output_types`는 `["MESSAGE","AI_MESSAGE"]`로 **동일하게 선언**되어 있으나, 캔버스는 이 값이 아니라 노드 타입별 런타임 규칙으로 판정한다. **JSON 정적 검사로는 타입 호환성을 확인할 수 없다.**
+>
+> 관련: `07-ixi-enterprise-requirements-spec.md` REQ-002 / REQ-019, `ixi-enterprise/docs/ivms-flow-a-build-lessons.md` 5.7절
 - **용도**: Tool 없이 단순 LLM 응답이 필요한 경우
 - **검증 일자**: 2026-05-18
 

@@ -44,16 +44,23 @@
 
 ---
 
-## 1. 인증/헤더 관련 사전 확인 사항 (플레이스홀더)
+## 1. 인증/헤더 관련 사전 확인 사항
 
-08번 문서에는 API Key, Bearer Token 등 구체적인 인증 헤더 스펙이 명시되어 있지 않다. 아래 값은 **IVMS 운영팀 확인 후 실제 값으로 교체해야 하는 플레이스홀더**다.
+08번 문서 「공통 인증 헤더」절은 `X-Global-Transaction-ID`/`X-APP-NAME`/`X-AuthorizationTime`/`X-Header-Authorization` 4종을 **필수(Y)**로 기재하고 있으나, **실제 캔버스 테스트 결과 이 4종을 모두 빈 값으로 두어도 API가 정상 응답값을 반환하는 것이 확인되었다(2026-08-18)**. 따라서 플로우 A 구성 시 인증 헤더 값 확보는 선행 조건이 아니다.
 
-| Header Key | Header Value (플레이스홀더) | 비고 |
+| Header Key | 캔버스 설정값 | 비고 |
 |---|---|---|
-| `Authorization` | `Bearer {IVMS_API_TOKEN}` | IVMS 운영팀에 인증 방식(API Key/Bearer/Basic 등) 확인 필요 |
+| `X-Global-Transaction-ID` | 빈 값 | 빈 값으로 정상 응답 확인(2026-08-18) |
+| `X-APP-NAME` | 빈 값 | 빈 값으로 정상 응답 확인(2026-08-18) |
+| `X-AuthorizationTime` | 빈 값 | 빈 값으로 정상 응답 확인(2026-08-18) |
+| `X-Header-Authorization` | 빈 값 | 빈 값으로 정상 응답 확인(2026-08-18) |
 | `Content-Type` | `application/json` | POST(`mngtListDetail`, `scanResultCodeMngtDetail`) 요청에만 필요 |
 
-> ⚠️ **IVMS 운영팀 확인 필요**: 실제 배포 전 반드시 (1) 인증 헤더 방식, (2) `{IVMS_BASE_URL}` 실제 도메인, (3) IP 화이트리스트 등록 필요 여부를 확인할 것.
+> **개정 이력(2026-08-18)**: 이 절은 원래 `Authorization: Bearer {IVMS_API_TOKEN}` 플레이스홀더를 두고 "IVMS 운영팀 확인 후 실제 값으로 교체해야 한다"고 서술했으나, 실제 캔버스 실행에서 헤더 4종이 모두 빈 값인 상태로 API가 정상 응답값을 반환함을 확인해 위 표로 교체했다. 이로써 7.2절 3차 개정 이력에서 한때 `msgCd: E` 실패의 원인으로 의심했던 `X-Header-Authorization` 서명 만료 가설은 **완전히 배제**된다 — 해당 실패의 실제 원인은 Query Params 잔존과 Read Timeout 부족이었음이 확정됐다.
+>
+> ⚠️ **단, 헤더 키 자체는 빈 값으로 남겨둘 것**(캔버스에서 키를 삭제하지 않는다). 또한 이 확인은 현재 테스트를 수행한 네트워크 환경 기준이므로, **배포 환경이 바뀌면(사내망 → 외부, 다른 IP 대역 등) 인증 요구가 달라질 수 있다.** 08번 문서 스펙표는 여전히 4종을 필수로 기재하고 있어, 서버가 헤더를 검증하지 않는 것인지 현재 호출 경로가 네트워크 레벨에서 이미 인가된 것인지는 구분되지 않았다.
+
+> ⚠️ **IVMS 운영팀 확인 필요(잔여)**: 실제 배포 전 (1) `{IVMS_BASE_URL}` 실제 도메인, (2) IP 화이트리스트 등록 필요 여부, (3) 배포 환경 변경 시 인증 헤더 요구 여부를 확인할 것. (인증 헤더 방식 자체는 위와 같이 현 환경에서 불필요함이 확인되어 확인 항목에서 제외)
 
 모든 API Request Tool 노드 공통 설정:
 - **Tool Mode**: ON (Agent의 Tools 포트에 연결하려면 필수)
@@ -103,12 +110,14 @@ curl -X GET -k -i "https://ivms.lguplus.co.kr/ivms/api/orgList?orgType=1&pOrgId=
 
 | Header Key | Header Value | 필수 | 설명 |
 |---|---|---|---|
-| `X-Global-Transaction-ID` | `test` | Y | 전역 트랜잭션 ID. curl 캡처는 `test` 고정값을 사용했으나, 실제로는 호출마다 고유한 트랜잭션 ID를 발급해야 하는 필드로 추정됨. **캔버스에 그대로 `test`로 고정 입력할지, 매 호출마다 동적으로 생성할지는 IVMS 운영팀 확인 필요.** ixi-enterprise API Request 노드의 Header Value는 정적 텍스트만 지원하므로, 동적 생성이 필수라면 별도 사전 처리(Function 노드 등)가 필요하나 04번 문서 노드 카탈로그상 그런 노드가 없어 **우선 고정값 `test`로 등록** |
-| `X-APP-NAME` | `IVMS` | Y | 호출 애플리케이션명 고정값. 모든 IVMS API 공통(다른 3개 API Request Tool에도 동일하게 등록해야 함) |
-| `X-AuthorizationTime` | `20250804T145618+0900` | Y | 인증 서명 생성 시각(`YYYYMMDDTHHmmss+0900`, KST). ⚠️ curl 캡처의 값은 **2025-08-04 캡처 당시 시각의 스냅샷**이며, `X-Header-Authorization` 서명과 시각이 페어로 검증되는 방식이라면 이 고정값은 **캡처 시점에만 유효하고 실제 운영에서는 매 호출 시각으로 갱신해야 할 가능성이 높음**. 정적 고정값으로 두면 서버가 시각 유효기간 초과로 거부할 위험이 있으므로 운영팀에 "이 값이 고정 가능한지, 매 호출마다 현재 시각으로 재계산해야 하는지" 확인 필요 |
-| `X-Header-Authorization` | `kzS7dQYRUHWC7sZb1W1Q+4OzPQEwjJ1fGVMehFOEOMjXbk22ntCbdOICw7JP15d5H4fDC4fI73hOiL0SuOgGdW==` | Y | 인증 서명 값. `X-AuthorizationTime`과 동일한 이유로, 이 값이 시각에 종속된 서명이라면 캡처 당시에만 유효한 값일 수 있다. 서명 생성 알고리즘(입력 문자열 구성, 해시 방식)이 캡처만으로는 특정되지 않으므로 **운영팀에 서명 생성 규칙을 확인해 매 호출 시 재계산하는 방식으로 전환해야 할 수 있음** |
+| `X-Global-Transaction-ID` | 빈 값 | N(실측) | 08번 문서 스펙표는 필수(Y)로 기재하나, **빈 값으로도 정상 응답이 확인됨(2026-08-18)**. 호출별 고유 ID 채번이나 동적 생성(Function 노드 부재로 캔버스 구현 불가) 문제는 발생하지 않음 |
+| `X-APP-NAME` | 빈 값 | N(실측) | 08번 문서 스펙표는 필수(Y), 고정값 `IVMS`로 기재하나, **빈 값으로도 정상 응답이 확인됨(2026-08-18)** |
+| `X-AuthorizationTime` | 빈 값 | N(실측) | 08번 문서 스펙표는 필수(Y)로 기재하나, **빈 값으로도 정상 응답이 확인됨(2026-08-18)**. 캡처값(`20250804T145618+0900`)을 그대로 넣을 필요 없음 — 아래 개정 이력 참고 |
+| `X-Header-Authorization` | 빈 값 | N(실측) | 08번 문서 스펙표는 필수(Y)로 기재하나, **빈 값으로도 정상 응답이 확인됨(2026-08-18)**. 서명 만료·재계산 문제는 발생하지 않음 — 아래 개정 이력 참고 |
 
-> ⚠️ **본 노드의 Header 설정과 관련한 핵심 리스크**: `X-AuthorizationTime`/`X-Header-Authorization` 두 값이 시각 기반 서명이라면, 위 표의 고정값을 그대로 캔버스에 입력해서는 실 운영 시 인증이 실패(만료)할 가능성이 있다. ixi-enterprise의 API Request 노드는 Header Value에 정적 문자열만 입력 가능하므로(04번 문서 기준 동적 표현식 지원 여부 불명), **IVMS 운영팀에 (1) 이 두 헤더가 고정값으로 장기간 재사용 가능한지, (2) 아니라면 어떤 방식으로 캔버스에서 매 호출마다 갱신할 수 있는지**를 반드시 확인한 뒤 배포해야 한다. 이 부분은 1절의 `Authorization: Bearer {IVMS_API_TOKEN}` 플레이스홀더보다 더 구체적이지만 여전히 **실 운영 재사용 가능 여부가 미확정**인 상태다.
+> **개정 이력(2026-08-18)**: 위 두 헤더는 원래 "curl 캡처 당시 시각의 스냅샷이라 만료됐을 수 있으므로 매 호출 시 재계산이 필요할 가능성이 높다"고 서술하고 그 값을 그대로 넣도록 안내했으나, **실제 캔버스 테스트에서 인증 헤더 4종을 모두 빈 값으로 두어도 API가 정상 응답값을 반환함이 확인**되어 빈 값 기준으로 교체했다(1절 참고). 이에 따라 이 문서 곳곳에서 실패 원인으로 의심했던 "서명/시각 만료" 가설은 모두 배제된다. 단 헤더 키 자체는 삭제하지 말고 빈 값으로 유지하며, 배포 환경이 바뀌면 인증 요구가 달라질 수 있다는 점은 1절 경고를 참고한다.
+
+> ✅ **해소됨(2026-08-18)**: 이 자리에는 원래 "`X-AuthorizationTime`/`X-Header-Authorization`이 시각 기반 서명이라면 고정값 입력 시 실 운영에서 만료로 인증 실패할 수 있고, ixi-enterprise는 Header Value에 정적 문자열만 지원하므로 매 호출 갱신 방법을 운영팀에 확인해야 한다"는 핵심 리스크 경고가 있었다. **실제로는 인증 헤더 4종을 모두 빈 값으로 두어도 API가 정상 응답값을 반환**하므로(1절 참고), 서명 갱신 메커니즘을 캔버스에서 구현해야 하는 문제 자체가 발생하지 않는다. 이 리스크는 해소된 것으로 처리한다.
 >
 > 나머지 3개 API Request Tool(`mngtListDetail`, `scanResultCodeMngtDetail`, `guidelineCdInfo`)에도 위 4개 헤더(`X-Global-Transaction-ID`, `X-APP-NAME`, `X-AuthorizationTime`, `X-Header-Authorization`)를 동일하게 등록해야 한다(POST 요청은 추가로 `Content-Type: application/json` 필요). 아래 2-3~2-5절의 Header 표도 이 4개 공통 헤더 기준으로 갱신 필요 — 상세는 각 절 참고.
 
@@ -866,7 +875,8 @@ timeEndYmd의 차이), 조치방법 요약(measure 원문에서 【조치방법�
 - [ ] 각 Agent 실행 시 `context limit exceeded` 오류가 재발하지 않는지 확인 — 재발 시(특히 Agent #1B의 1차 경량 스캔 단계에서) 방법 3(외부 배치 스크립트 분리)을 검토
 - [ ] Human Approval → Language Model → Chat Output 경유 구조 확인(직결 시도 금지)
 - [ ] Chat Output은 Chat Output 쪽에서 드래그해 Language Model과 연결했는지 확인
-- [ ] `{IVMS_BASE_URL}`, `{IVMS_API_TOKEN}` 플레이스홀더를 실제 값으로 교체했는지 확인(IVMS 운영팀 확인 후)
+- [ ] `{IVMS_BASE_URL}` 플레이스홀더를 실제 도메인으로 교체했는지 확인(IVMS 운영팀 확인 후)
+- [ ] 인증 헤더 4종의 **키가 등록되어 있는지**(값은 빈 값으로 두면 됨 — 2026-08-18 정상 응답 확인, 1절 참고). `{IVMS_API_TOKEN}` 토큰 발급은 현 환경에서 불필요함이 확인되어 체크 항목에서 제외
 
 > `guidelineCdInfo` 관련 체크 항목(Query Params 5개 필드, 응답 불일치 방어 로직)은 해당 Tool이 아직 미검증 상태이므로 이 체크리스트에서 제외했다. 7.4절 검증 완료 후 추가한다.
 
@@ -962,7 +972,7 @@ ixi-enterprise에는 단일 노드 독립 실행(Test Step), Pin Data, Execution
 2. 기대 응답: `orgId`(`org_000991`)와 조직명(`Enterprise SW프로덕트개발팀`)이 포함된 응답(문장 형식은 강제하지 않음 — 위 개정 이력 참고)
 3. 응답에 `orgId`가 포함되지 않거나 "Tool에 접근할 수 없다"는 취지의 응답이 나오면, 다음을 순서대로 점검:
    - API Request Tool의 Tool Mode가 ON인지, Tools 포트에 실제 연결선이 있는지
-   - Header 4종이 2-2절과 정확히 일치하는지 (특히 `X-AuthorizationTime`/`X-Header-Authorization`은 캡처 시점 값이라 만료됐을 수 있음 — 2-2절 96행 경고 참고)
+   - Header 4종의 **키가 등록되어 있는지**(값은 빈 값이어도 정상 — 2026-08-18 확인, 1절 참고). 과거에는 `X-AuthorizationTime`/`X-Header-Authorization` 만료를 우선 의심하도록 안내했으나 그 가설은 배제됐으므로, 인증보다 아래 Query Params/Timeout 항목을 먼저 점검할 것
    - System Prompt에 응답 형식을 문장으로 강제하는 지시나 "이번 단계에서 하지 않는다"류 범위 제한 문구가 들어가 있지 않은지(Tool 호출 흐름과 충돌해 오류를 유발한 사례 있음 — 위 개정 이력 참고)
 4. 검증되면 2단계(`mngtListDetail` 추가)로 넘어간다.
 
@@ -983,6 +993,8 @@ ixi-enterprise에는 단일 노드 독립 실행(Test Step), Pin Data, Execution
 > 이 `asstType`/`templateNo` 값은 조직·자산마다 다르므로 System Prompt에 고정값으로 넣을 수 없다. 08번 문서 1.2절(`assetSsrcceTemplate`, 153~183행)과 1.3절(`assetCategory`, 189~260행)에 각각 `templateNo`와 `asstType`(→`asstCtgrList[].asstType`)을 조회하는 API가 이미 존재하므로, 이 두 API를 `mngtListDetail` 호출 전에 추가로 호출해 값을 동적으로 확정하는 구조로 2차 수정한다.
 >
 > **개정 이력(2026-07-14, 3차)**: 2차 수정 후에도 `mngtListDetail`이 운영 서버(`ivms.lguplus.co.kr`)에서 `msgCd: E`로 계속 실패해, 한동안 `X-Header-Authorization` 서명 만료를 원인으로 의심하고 IVMS 운영팀 문의가 필요하다는 결론까지 갔었다. 그러나 실제로는 인증 서명 문제가 아니라 캔버스 Tool 노드의 **설정 2가지**가 원인이었음이 확인됐다: (1) Query Params 칸에 값이 남아있어 POST+Body 요청에 불필요한 쿼리스트링이 붙었던 점, (2) Read Timeout이 10000ms로 짧아 응답(자산 1000건 이상 조회 시 수 초 이상 소요)이 오기 전에 타임아웃 처리된 점. Query Params를 전부 비우고 Read Timeout을 **30000ms**로 늘리자 정상 성공(`listCount` 정상 반환)이 확인됐다. 성공 응답에서도 `[WARN] mgmtOrgId 불일치/누락` 경고가 함께 나올 수 있으나 이는 API 실패가 아니라 데이터 정합성 경고이며 플로우 진행에는 영향 없다.
+>
+> **개정 이력(2026-08-18, 서명 만료 가설 최종 배제)**: 위 3차 개정에서 "인증 서명 문제가 아니었다"고 정정했으나 가능성 자체는 열어둔 상태였다. 이후 인증 헤더 4종을 **모두 빈 값으로 두어도 API가 정상 응답값을 반환**함이 확인되어(1절 참고), `X-Header-Authorization` 서명 만료 가설은 최종적으로 배제됐다. 이 계열 실패의 원인은 위에 적힌 Query Params 잔존과 Read Timeout 부족 2가지로 확정한다.
 >
 > **개정 이력(2026-07-14, 4차 — pageSize 상향 후에도 재발, #1B를 경량 스캔으로 재정의)**: `pageSize=200`+반복상한(3회, 600건) 대응 후에도 자산이 더 많은 조직에서 Agent #1B의 컨텍스트 예산 초과가 재발했다(0절 3차 개정 이력 참고). 이에 따라 **이 2단계에서 구성하는 Agent #1B는 "담당자 목록 경량 스캔" 역할로 재정의**한다 — 아래 "Agent #1B System Prompt (신규)"는 이제 자산 상세(asstNm/securityScore/timeEndYmd)를 응답에 남기지 않고 `chrgId`/`chrgNm`만 추출하는 **2-7절 최신 버전**을 그대로 사용해야 한다(아래 원문은 이전 버전이므로 실제 구성 시 **2-7절의 System Prompt로 교체**할 것). 담당자별 자산 상세 수집(기존 이 절이 담당하던 역할)은 **7.2-2절(신규, Agent #1B-2)**로 분리했다 — 2단계 완료 후 바로 7.2-2절로 진행한다.
 
