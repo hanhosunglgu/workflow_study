@@ -98,3 +98,4 @@ total_progress = Jira 티켓 완료율 × 40%
 ## 개발 기간
 
 2026-05-08 ~ 2026-05-20 (Phase 0~5 + Post 버그 수정 완료)
+# workflow_study
