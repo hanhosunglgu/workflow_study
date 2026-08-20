@@ -1,3 +1,8 @@
 .DS_Store
 .claude/
 .playwright-mcp/
+.serena/
+
+# IVMS API 검증 스크린샷 (사내 운영 화면 캡처 — 저장소 미포함)
+# 08-ivms_openapi_spec.md가 검증 근거로 인용하므로 로컬에는 보관할 것
+ivms/
