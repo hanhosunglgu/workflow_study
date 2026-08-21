@@ -1,0 +1,577 @@
+{
+  "name": "graph_w0m_scale_measure",
+  "role": "사내보안 ivms 연결 테스트",
+  "description": "운영기 조직별 실자산 규모 측정: mngtListDetail을 pageSize=1로 호출해 listCount만 수집한다. 가짜 조직 ID를 기준선으로 대조해 조직 미기입 자산을 차감한다. 터미널에서 운영기 접근이 막혀 캔버스를 측정 도구로 사용",
+  "config": {
+    "options": [
+      {
+        "name": "number_of_messages",
+        "type": "INT",
+        "description": "대화에서 기억할 메시지의 개수 (AI 메시지 포함)",
+        "placeholder": null,
+        "required": true,
+        "is_shown": true,
+        "display_name": "메시지 히스토리 길이",
+        "value": 20
+      }
+    ],
+    "version": "v2"
+  },
+  "nodes": [
+    {
+      "id": "b962296f-0c40-4e39-b3bf-00c8788ad0d3",
+      "metadata": {
+        "outputs": [],
+        "fields": [
+          {
+            "name": "input",
+            "type": "MESSAGE",
+            "description": "입력",
+            "placeholder": null,
+            "required": true,
+            "is_shown": true,
+            "display_name": "Input",
+            "refresh_button": false,
+            "input_types": [
+              "AI_MESSAGE"
+            ],
+            "multiple_inputs": true,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null
+          }
+        ],
+        "name": "ChatOutput",
+        "display_name": "Chat Output",
+        "description": "AI 출력 컴포넌트",
+        "category": "OUTPUT",
+        "can_be_tool": false
+      },
+      "canvas": {
+        "x": 2670,
+        "y": 1365,
+        "width": 285,
+        "height": 82
+      }
+    },
+    {
+      "id": "9a7b36c1-9d2f-4a37-a1bd-68b9ef34c0f3",
+      "metadata": {
+        "outputs": [
+          {
+            "name": "message",
+            "display_name": "User Message",
+            "output_types": [
+              "MESSAGE"
+            ],
+            "multiple_outputs": true
+          }
+        ],
+        "fields": [],
+        "name": "ChatInput",
+        "display_name": "Chat Input",
+        "description": "채팅 입력 컴포넌트",
+        "category": "INPUT",
+        "can_be_tool": false
+      },
+      "canvas": {
+        "x": 255,
+        "y": 1170,
+        "width": 285,
+        "height": 79
+      }
+    },
+    {
+      "id": "fcf02482-14dc-4d0c-883e-b243e03c6b3d",
+      "metadata": {
+        "can_be_tool": true,
+        "tool_mode": true,
+        "outputs": [
+          {
+            "name": "tool",
+            "display_name": "Tool",
+            "output_types": [
+              "TOOL"
+            ],
+            "multiple_outputs": true
+          }
+        ],
+        "fields": [
+          {
+            "name": "tool_description",
+            "type": "TEXT",
+            "description": "에이전트가 툴을 선택할 때 참고할 툴의 설명입니다.",
+            "placeholder": "툴을 자세히 묘사하여, 에이전트가 참고하는데 도움을 주세요.",
+            "required": true,
+            "is_shown": true,
+            "display_name": "툴 설명",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "조직별 자산 건수를 조회하는 도구. Method는 POST이며 Body로 조건을 전달한다. 응답의 result.listCount가 조건에 해당하는 자산 총 건수다. 본 측정에서는 listCount만 사용하므로 pageSize를 1로 고정해 응답을 최소화한다. 주의: 조직 ID가 미기입된 자산은 mgmtOrgId 조건과 무관하게 함께 반환되므로, 존재하지 않는 조직 ID로 호출한 결과를 기준선으로 삼아 차감해야 실자산이 나온다.",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": null,
+            "editable": true
+          },
+          {
+            "name": "url",
+            "type": "TEXT",
+            "description": "호출할 API의 주소를 입력하세요. 예: https://wttr.in/Seoul?format=j1",
+            "placeholder": "https://api.example.com/data",
+            "required": true,
+            "is_shown": true,
+            "display_name": "URL",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "https://ivms.lguplus.co.kr/ivms/api/mngtListDetail",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": "^(http|https)://[^\\s/$.?#].[^\\s]*$",
+            "editable": true
+          },
+          {
+            "name": "method",
+            "type": "DROPDOWN",
+            "description": "API 호출 방식을 선택하세요.\n- GET: 데이터를 조회할 때 사용\n- POST: 데이터를 전송하거나 생성할 때 사용\n- PUT: 데이터를 수정할 때 사용\n- PATCH: 데이터 일부만 수정할 때 사용\n- DELETE: 데이터를 삭제할 때 사용\n",
+            "placeholder": null,
+            "required": true,
+            "is_shown": true,
+            "display_name": "Method",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "POST",
+            "should_update": true,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "options": [
+              "GET",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ],
+            "option_item_metadata": [],
+            "searchable": false
+          },
+          {
+            "name": "connect_timeout",
+            "type": "INT",
+            "description": "API 서버에 연결을 시도하는 최대 대기 시간입니다.\n- 설정한 시간 안에 연결되지 않으면 호출을 중단합니다.\n",
+            "placeholder": "기본값: 1000 ms",
+            "required": false,
+            "is_shown": true,
+            "display_name": "Connect Timeout (ms)",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": 5000,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "is_positive": true
+          },
+          {
+            "name": "read_timeout",
+            "type": "INT",
+            "description": "연결 후 API 서버의 응답을 기다리는 최대 시간입니다.\n- 설정한 시간 안에 응답이 없으면 호출을 중단합니다.\n",
+            "placeholder": "기본값: 3000 ms",
+            "required": false,
+            "is_shown": true,
+            "display_name": "Read Timeout (ms)",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": 30000,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "is_positive": true
+          },
+          {
+            "name": "header",
+            "type": "OBJECT",
+            "description": "API 서버 접근에 필요한 인증 정보를 설정합니다.\n- 인증이 필요 없으면 생략할 수 있으며, Content-Type 등 기본 헤더는 자동 적용됩니다.\n- API 키는 시크릿으로 먼저 등록한 뒤 선택할 수 있습니다.\n",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Header",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": [
+              {
+                "key": "X-Global-Transaction-ID",
+                "value": ""
+              },
+              {
+                "key": "X-APP-NAME",
+                "value": ""
+              },
+              {
+                "key": "X-AuthorizationTime",
+                "value": ""
+              },
+              {
+                "key": "X-Header-Authorization",
+                "value": ""
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "properties": [
+              {
+                "name": "key",
+                "display_name": "Header Key",
+                "description": "요청 헤더 키",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              },
+              {
+                "name": "value",
+                "display_name": "Header Value",
+                "description": "요청 헤더 값",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              }
+            ],
+            "modifiable_row": true
+          },
+          {
+            "name": "query_params",
+            "type": "OBJECT",
+            "description": "URL 뒤에 붙는 검색 조건이나 필터값을 설정합니다.\n- 예: https://api.example.com/data?category=food&limit=10 일 때 category, limit 같은 값을 Key/Value로 입력하면 자동으로 URL에 추가됩니다.\n",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Query Params",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": [],
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "properties": [
+              {
+                "name": "name",
+                "display_name": "Query Param 이름",
+                "description": "Query Param 이름",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              },
+              {
+                "name": "description",
+                "display_name": "Query Param 설명",
+                "description": "Query Param 설명",
+                "editable": true,
+                "data_type": "string",
+                "default_value": "",
+                "is_shown": true
+              }
+            ],
+            "modifiable_row": true
+          },
+          {
+            "name": "body",
+            "type": "SCHEMA",
+            "description": "POST, PUT, PATCH 요청 시 서버에 전달할 데이터 Body의 구조를 정의합니다.",
+            "placeholder": null,
+            "required": true,
+            "is_shown": true,
+            "display_name": "요청 본문 스키마",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "{\n  \"title\": \"mngtListDetail\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"userId\": {\n      \"type\": \"string\",\n      \"description\": \"요청 사용자 ID. \\\"admin\\\"을 사용한다.\"\n    },\n    \"mgmtOrgId\": {\n      \"type\": \"string\",\n      \"description\": \"조직 ID. 측정 대상 조직의 ID를 넣는다. 기준선 측정 시에는 존재하지 않는 값 org_ZZZZZZZ 를 넣는다.\"\n    },\n    \"asstType\": {\n      \"type\": \"string\",\n      \"description\": \"자산타입. \\\"SSRCCE\\\"를 사용한다.\"\n    },\n    \"templateNo\": {\n      \"type\": \"string\",\n      \"description\": \"진단템플릿 번호. \\\"151\\\"을 사용한다.\"\n    },\n    \"diagYear\": {\n      \"type\": \"string\",\n      \"description\": \"기준연도. \\\"2026\\\"을 사용한다.\"\n    },\n    \"page\": {\n      \"type\": \"integer\",\n      \"description\": \"현재 페이지. 항상 1을 사용한다.\"\n    },\n    \"pageSize\": {\n      \"type\": \"integer\",\n      \"description\": \"페이지당 항목 수. 반드시 1을 사용한다. listCount만 필요하므로 값을 키우면 자산 원문이 통째로 들어와 컨텍스트 예산을 넘긴다.\"\n    }\n  },\n  \"required\": [\n    \"userId\",\n    \"mgmtOrgId\",\n    \"asstType\",\n    \"templateNo\"\n  ],\n  \"additionalProperties\": true,\n  \"strict\": false\n}",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "data_types": [
+              "object",
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "array"
+            ]
+          }
+        ],
+        "name": "APIRequest",
+        "display_name": "API Request",
+        "description": "HTTP API 요청을 보내고 응답을 처리합니다.",
+        "category": "DATA",
+        "last_body_tool_mode_value": null,
+        "last_body_non_tool_mode_value": null,
+        "last_tool_description_value": null
+      },
+      "canvas": {
+        "x": 705,
+        "y": 1695,
+        "width": 285,
+        "height": 846
+      }
+    },
+    {
+      "id": "d15d2eb5-853f-41a0-bef3-60eec84945b3",
+      "metadata": {
+        "outputs": [
+          {
+            "name": "response",
+            "display_name": "Response",
+            "output_types": [
+              "MESSAGE",
+              "AI_MESSAGE"
+            ],
+            "multiple_outputs": true
+          }
+        ],
+        "fields": [
+          {
+            "name": "input",
+            "type": "TEXT",
+            "description": "",
+            "placeholder": "",
+            "required": true,
+            "is_shown": true,
+            "display_name": "Input",
+            "refresh_button": false,
+            "input_types": [
+              "MESSAGE"
+            ],
+            "multiple_inputs": false,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null,
+            "multiline": true,
+            "regex": null,
+            "editable": true
+          },
+          {
+            "name": "tools",
+            "type": "TOOL",
+            "description": "에이전트가 사용할 도구들",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "Tools",
+            "refresh_button": false,
+            "input_types": [
+              "TOOL"
+            ],
+            "multiple_inputs": true,
+            "value": null,
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": null
+          },
+          {
+            "name": "system_prompt_template",
+            "type": "PROMPT",
+            "description": "에이전트의 시스템 프롬프트 템플릿",
+            "placeholder": null,
+            "required": false,
+            "is_shown": true,
+            "display_name": "System Prompt Template",
+            "refresh_button": false,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "너는 IVMS 조직별 자산 규모를 재는 측정 전담 에이전트다.\n\n측정 목적은 조직 하나를 캔버스 워크플로우로 처리할 수 있는지 판단할 숫자를 얻는\n것이다. 자산 내용은 필요 없고 건수만 필요하다.\n\n[가장 중요한 규칙 — 가짜 조직 ID 대조]\nIVMS는 조직 ID가 미기입된 자산을 조회 조건과 무관하게 함께 반환한다. 그래서\n조직을 지정해 조회해도 그 건수 대부분이 해당 조직과 무관할 수 있다.\n이를 걸러내려면 존재하지 않는 조직 ID로도 한 번 호출해 기준선을 잡아야 한다.\n\n실자산은 다음과 같이 계산한다.\n  실자산 = 조직 조회 건수 - 가짜 조직 ID 건수\n\n이 대조를 생략하면 측정 결과가 무의미하다. 반드시 수행한다.\n\n[호출 규칙]\n- mngtListDetail을 호출한다. Method는 POST다.\n- 모든 호출에서 pageSize는 반드시 1로 한다. 응답의 listCount만 쓰기 때문이며,\n  값을 키우면 자산 원문이 통째로 들어와 예산을 넘긴다.\n- 공통 파라미터는 아래 값을 그대로 쓴다.\n    userId 는 admin\n    asstType 은 SSRCCE\n    templateNo 는 151\n    diagYear 는 2026\n    page 는 1\n    pageSize 는 1\n- filter 파라미터는 사용하지 않는다. 서버가 무시함이 확인됐다.\n- 🔴 호출은 전체를 통틀어 최대 4회를 넘기지 않는다. 4회를 채우면 즉시 중단하고\n  그때까지 얻은 결과만 보고한다. 더 재려 하지 않는다.\n\n[측정 순서]\n1회차: mgmtOrgId 에 존재하지 않는 값 org_ZZZZZZZ 를 넣어 호출한다.\n       이 건수가 기준선이다. 이 값을 반드시 먼저 확보한다.\n\n2회차: 사용자가 지정한 조직 ID로 호출한다.\n       조직을 지정하지 않았으면 org_000991 로 한다.\n\n3~4회차: 사용자가 조직을 여러 개 지정한 경우에만 추가 호출한다.\n        지정하지 않았으면 2회차에서 끝낸다.\n\n[출력 형식]\n아래 형식으로만 출력한다. 다른 설명은 덧붙이지 않는다.\n\n기준선(가짜 ID org_ZZZZZZZ): 건수\n---\n조직ID: 실제 값\n반환건수: 실제 값\n실자산: 반환건수 빼기 기준선\n페이지수: 실자산을 200으로 나눠 올림한 값\n판정: 아래 기준에 따라 한 줄\n\n판정 기준\n- 실자산이 600건 이하이면 \"계층1 1회 실행으로 완주 가능\"\n- 실자산이 601에서 1400건이면 \"계층1 2에서 3회 실행 필요\"\n- 실자산이 1401건 이상이면 \"조직 단위로도 초과. 추가 분해 필요\"\n- 기준선이 100건 미만이면 \"운영기에는 조직 미기입 자산이 거의 없음\"을 함께 적는다\n\n숫자는 응답의 listCount 값을 그대로 쓴다. 추정하거나 지어내지 않는다.\n호출이 실패하면 실패한 파라미터를 그대로 적는다.\n\n[중요] 이 플로우는 자산 목록이나 취약점을 조회하지 않는다. 건수만 센다.\n안내문 생성도 하지 않는다.",
+            "should_update": false,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "system_prompt_template"
+            ],
+            "multiline": true,
+            "use_prompt_gallery": true
+          },
+          {
+            "name": "model",
+            "type": "DROPDOWN",
+            "description": "언어 모델 제공자",
+            "placeholder": "모델을 선택하세요",
+            "required": true,
+            "is_shown": true,
+            "display_name": "Model",
+            "refresh_button": true,
+            "input_types": [],
+            "multiple_inputs": false,
+            "value": "azure_openai:gpt-5.5",
+            "should_update": true,
+            "should_copy_value": true,
+            "root_group_field_names": [
+              "model"
+            ],
+            "options": [
+              "ixi:llm-ixi-gen-docs",
+              "ixi:llm-kexaone-k-exaone",
+              "azure_openai:gpt-5.1-chat",
+              "azure_openai:gpt-5.4-nano",
+              "azure_openai:gpt-5.4-mini",
+              "azure_openai:gpt-5.5",
+              "azure_openai:gpt-5.4"
+            ],
+            "option_item_metadata": [
+              {
+                "model_name": "llm-ixi-gen-docs",
+                "model_id": 401,
+                "provider_id": 4,
+                "provider_name": "ixi",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": false
+              },
+              {
+                "model_name": "llm-kexaone-k-exaone",
+                "model_id": 402,
+                "provider_id": 4,
+                "provider_name": "ixi",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": false
+              },
+              {
+                "model_name": "gpt-5.1-chat",
+                "model_id": 403,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4-nano",
+                "model_id": 404,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4-mini",
+                "model_id": 405,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.5",
+                "model_id": 406,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              },
+              {
+                "model_name": "gpt-5.4",
+                "model_id": 407,
+                "provider_id": 4,
+                "provider_name": "azure_openai",
+                "metadata_type": "PROVIDER",
+                "tags": [],
+                "model_type_list": [
+                  "LLM"
+                ],
+                "parameters": {},
+                "supports_vision": true
+              }
+            ],
+            "searchable": false
+          }
+        ],
+        "name": "Agent",
+        "display_name": "Agent",
+        "description": "요청을 주어진 도구를 사용하여 처리하는 에이전트",
+        "category": "AGENT",
+        "can_be_tool": false
+      },
+      "canvas": {
+        "x": 1065,
+        "y": 1125,
+        "width": 285,
+        "height": 461
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "9a7b36c1-9d2f-4a37-a1bd-68b9ef34c0f3",
+      "source_output_name": "message",
+      "target": "d15d2eb5-853f-41a0-bef3-60eec84945b3",
+      "target_field_name": "input"
+    },
+    {
+      "source": "fcf02482-14dc-4d0c-883e-b243e03c6b3d",
+      "source_output_name": "tool",
+      "target": "d15d2eb5-853f-41a0-bef3-60eec84945b3",
+      "target_field_name": "tools"
+    },
+    {
+      "source": "d15d2eb5-853f-41a0-bef3-60eec84945b3",
+      "source_output_name": "response",
+      "target": "b962296f-0c40-4e39-b3bf-00c8788ad0d3",
+      "target_field_name": "input"
+    }
+  ],
+  "notes": [],
+  "display_name": "ivms W0-M - 운영기 규모 측정",
+  "is_favorite": false,
+  "has_schedule": false,
+  "status": "ACTIVE",
+  "ownership": "MY",
+  "validation_status": "VALID",
+  "validation_errors": [],
+  "tags": [
+    {
+      "id": 187,
+      "name": "보안"
+    }
+  ]
+}
