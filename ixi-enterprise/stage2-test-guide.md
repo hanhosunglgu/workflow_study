@@ -124,7 +124,7 @@ asstType: SSRCCE
 
 | 증상 | 원인 / 대응 |
 |---|---|
-| `context limit exceeded` | **본 단계의 핵심 리스크.** 먼저 `pageSize=200`이 실제 요청에 실렸는지 확인(3.1절 스키마 문제 재발 여부). 실렸는데도 초과면 11번 문서의 "방법 3(외부 배치 스크립트로 페이지네이션 분리)" 검토 시점 |
+| `context limit exceeded` | **본 단계의 핵심 리스크.** 먼저 `pageSize=200`이 실제 요청에 실렸는지 확인(3.1절 스키마 문제 재발 여부). 실렸는데도 초과면 **처리 범위를 `mgmtOrgId` 하위 조직 단위로 축소**한다(`12-flow-a-restructure-plan.md` 7.2절). ~~11번 문서 "방법 3(외부 배치 스크립트로 페이지네이션 분리)"~~은 캔버스 컴포넌트 한정 제약으로 기각됐다 |
 | `msgCd: E` (필수 컬럼 확인 필요) | **`asstLCtgrId` 필요 가능성**(3.2절). Agent #1A 프롬프트에 "assetCategory 응답의 `asstCtgrId`도 함께 출력"을 추가하고, #1B가 그 값을 `asstLCtgrId`로 넘기도록 수정 |
 | HTTP 405 | Method가 POST인지 확인 |
 | 타임아웃 | read timeout이 30000인지 확인(원본은 10000이었음) |
